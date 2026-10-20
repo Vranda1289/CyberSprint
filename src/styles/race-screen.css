@@ -430,6 +430,7 @@
   letter-spacing: 0.04em;
   user-select: none;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .passage-char {

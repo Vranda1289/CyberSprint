@@ -1,6 +1,17 @@
 import { MAX_WRONG_BUFFER, MIN_WPM_ELAPSED_MS } from './config.js';
 
 /**
+ * Pure typing state machine.
+ * 
+ * Invariants:
+ * - credited: length of common prefix of typed and passage (locked, never decreases)
+ * - wrongCount: typed.length - credited (bounded by MAX_WRONG_BUFFER, never negative)
+ * - isError: derived strictly as (wrongCount > 0)
+ * - expectedChar: passage[credited] (undefined when finished)
+ * - finishedAtMs: recorded once when credited === passage.length
+ */
+
+/**
  * Creates the initial pure typing state for a given passage.
  * @param {string} passage 
  * @returns {TypingState}
@@ -11,6 +22,8 @@ export function createTypingState(passage = '') {
     typed: '',
     credited: 0,
     wrongCount: 0,
+    isError: false,
+    expectedChar: passage.length > 0 ? passage[0] : undefined,
     keystrokes: 0,
     correctKeystrokes: 0,
     startedAtMs: null,
@@ -19,20 +32,7 @@ export function createTypingState(passage = '') {
 }
 
 /**
- * Handles character input from the player.
- * 
- * Rules:
- * - If already finished, no-op.
- * - Multi-character/paste attempts (char.length !== 1) are ignored.
- * - If wrongCount reaches MAX_WRONG_BUFFER, new characters are blocked until Backspace.
- * - Backspace does not increment keystrokes (only appended chars count as keystrokes).
- * - A keystroke is counted as "correct" if and only if:
- *     wrongCount === 0 AND char === passage[credited]
- * - Accuracy formula:
- *     Accuracy = (correctKeystrokes / keystrokes) * 100 (or 100 if keystrokes === 0).
- *     Subsequent corrections do not erase earlier mistakes from the accuracy count.
- * - Correct characters are permanently locked: credited never decreases.
- * - Finish event records finishedAtMs exactly once when credited === passage.length.
+ * Handles a single character input.
  *
  * @param {TypingState} state
  * @param {string} char
@@ -45,7 +45,7 @@ export function handleCharacterInput(state, char, nowMs = 0) {
     return state;
   }
 
-  // Reject multi-character/paste inputs
+  // Reject invalid character inputs
   if (typeof char !== 'string' || char.length !== 1) {
     return state;
   }
@@ -65,24 +65,30 @@ export function handleCharacterInput(state, char, nowMs = 0) {
     const newCredited = state.credited + 1;
     const isFinished = newCredited === state.passage.length;
     const newFinishedAtMs = isFinished && state.finishedAtMs === null ? nowMs : state.finishedAtMs;
+    const nextExpected = isFinished ? undefined : state.passage[newCredited];
 
     return {
       ...state,
       typed: state.typed + char,
       credited: newCredited,
       wrongCount: 0,
+      isError: false,
+      expectedChar: nextExpected,
       keystrokes: newKeystrokes,
       correctKeystrokes: state.correctKeystrokes + 1,
       startedAtMs: newStartedAtMs,
       finishedAtMs: newFinishedAtMs,
     };
   } else {
-    // Mismatched char or continuing to type after a mistake
+    // Mismatched char or continuing to type after an uncorrected mistake
+    const newWrongCount = state.wrongCount + 1;
     return {
       ...state,
       typed: state.typed + char,
       credited: state.credited, // Locked, credited never decreases
-      wrongCount: state.wrongCount + 1,
+      wrongCount: newWrongCount,
+      isError: true,
+      expectedChar: state.passage[state.credited],
       keystrokes: newKeystrokes,
       correctKeystrokes: state.correctKeystrokes, // Not incremented on mistake
       startedAtMs: newStartedAtMs,
@@ -109,16 +115,66 @@ export function handleBackspace(state) {
   }
 
   if (state.wrongCount > 0) {
+    const newWrongCount = state.wrongCount - 1;
     return {
       ...state,
       typed: state.typed.slice(0, -1),
-      wrongCount: state.wrongCount - 1,
-      // credited remains strictly unchanged
+      wrongCount: newWrongCount,
+      isError: newWrongCount > 0,
+      expectedChar: state.passage[state.credited],
     };
   }
 
   // At lock boundary: cannot erase locked characters
   return state;
+}
+
+/**
+ * Atomic transition for any input change (from input event, fast typing, or keypress).
+ * 
+ * Rules:
+ * - Paste and drop are blocked when isPasteOrDrop is true.
+ * - Sequential characters in fast typing are applied character by character.
+ * - Deletion via Backspace / cut respects locked credited characters.
+ * - Input is bounded by MAX_WRONG_BUFFER and clamped to engine state.
+ *
+ * @param {TypingState} state
+ * @param {string} newInputValue
+ * @param {number} nowMs
+ * @param {boolean} isPasteOrDrop
+ * @returns {TypingState}
+ */
+export function applyInput(state, newInputValue, nowMs = 0, isPasteOrDrop = false) {
+  if (state.finishedAtMs !== null || isPasteOrDrop) {
+    return state;
+  }
+
+  if (typeof newInputValue !== 'string' || newInputValue === state.typed) {
+    return state;
+  }
+
+  // Deletion / Backspace event
+  if (newInputValue.length < state.typed.length) {
+    const deleteCount = state.typed.length - newInputValue.length;
+    let nextState = state;
+    for (let i = 0; i < deleteCount; i++) {
+      nextState = handleBackspace(nextState);
+    }
+    return nextState;
+  }
+
+  // Characters appended (single key or fast typing burst)
+  const appended = newInputValue.slice(state.typed.length);
+  let nextState = state;
+
+  for (let i = 0; i < appended.length; i++) {
+    nextState = handleCharacterInput(nextState, appended[i], nowMs);
+    if (nextState.finishedAtMs !== null) {
+      break;
+    }
+  }
+
+  return nextState;
 }
 
 /**

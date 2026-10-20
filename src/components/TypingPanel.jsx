@@ -7,7 +7,7 @@ export function TypingPanel({
   isFocused,
   onPanelClick,
 }) {
-  const { credited, wrongCount } = typingState;
+  const { credited, wrongCount, isError } = typingState;
   const passageChars = passage.split('');
 
   return (
@@ -38,7 +38,7 @@ export function TypingPanel({
         <span className="terminal-dot green" />
         <span className="terminal-title">NEURAL LINK // INPUT STREAM</span>
         <span className="terminal-status">
-          {wrongCount > 0 ? (
+          {isError ? (
             <span className="text-error font-mono">ERROR DETECTED // BACKSPACE TO CLEAR</span>
           ) : (
             <span className="text-cyan font-mono">CADENCE LOCKED</span>

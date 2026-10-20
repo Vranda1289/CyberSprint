@@ -3,16 +3,18 @@ import {
   createTypingState,
   handleCharacterInput,
   handleBackspace,
+  applyInput,
 } from '../game/typingEngine.js';
 
 /**
  * Hook managing hidden input focus and typing interactions.
  * 
- * Rules (Section 4):
- * - Blocks paste, drop, cut.
- * - Handles single-character inputs and Backspace only.
- * - Rejects any input before race starts, after player finishes, or after race concludes.
- * - Refocuses on typing panel click. Does not trap Tab or Esc.
+ * Rules:
+ * - Blocks paste, drop, cut via onPaste/onDrop/onCut and onBeforeInput.
+ * - Synchronizes with passage changes via useEffect.
+ * - Atomically synchronizes input value with typingState.typed.
+ * - Handles both keydown events and input/change events for IME / rapid typing.
+ * - Does not trap Tab or Escape.
  */
 export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   const [typingState, setTypingState] = useState(() => createTypingState(passage));
@@ -36,6 +38,11 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     }
   }, []);
 
+  // Synchronize when passage prop changes
+  useEffect(() => {
+    resetTyping(passage);
+  }, [passage, resetTyping]);
+
   const focusInput = useCallback(() => {
     if (inputRef.current) {
       inputRef.current.focus({ preventScroll: true });
@@ -46,7 +53,7 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   // Handle keydown for Backspace and standard characters
   const handleKeyDown = useCallback(
     (e) => {
-      // Allow Tab, Escape, and browser dev/navigation keys to function normally
+      // Allow Tab, Escape, and browser navigation keys to function normally
       if (e.key === 'Tab' || e.key === 'Escape' || e.altKey || e.ctrlKey || e.metaKey) {
         return;
       }
@@ -65,10 +72,13 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
         const nextState = handleBackspace(currentState);
         typingStateRef.current = nextState;
         setTypingState(nextState);
+        if (inputRef.current) {
+          inputRef.current.value = nextState.typed;
+        }
         return;
       }
 
-      // Normal single characters (letters, numbers, spaces, punctuation)
+      // Normal single characters
       if (e.key.length === 1) {
         e.preventDefault();
         if (onFirstKey && currentState.keystrokes === 0) {
@@ -80,8 +90,10 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
 
         typingStateRef.current = nextState;
         setTypingState(nextState);
+        if (inputRef.current) {
+          inputRef.current.value = nextState.typed;
+        }
 
-        // Check if this keypress finished the passage
         if (nextState.finishedAtMs !== null && onPlayerFinish) {
           onPlayerFinish(nextState.finishedAtMs);
         }
@@ -90,12 +102,56 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     [onPlayerFinish, onFirstKey]
   );
 
-  // Paste / Cut / Drop handlers to strictly enforce typing rules
+  // Handle input / change events (e.g., IME composition or fast bursts)
+  const handleInputChange = useCallback(
+    (e) => {
+      if (!isRacingRef.current) {
+        if (inputRef.current) {
+          inputRef.current.value = typingStateRef.current.typed;
+        }
+        return;
+      }
+
+      const currentState = typingStateRef.current;
+      if (currentState.finishedAtMs !== null) {
+        if (inputRef.current) {
+          inputRef.current.value = currentState.typed;
+        }
+        return;
+      }
+
+      const nowMs = performance.now();
+      const nextState = applyInput(currentState, e.target.value, nowMs);
+
+      typingStateRef.current = nextState;
+      setTypingState(nextState);
+      if (inputRef.current) {
+        inputRef.current.value = nextState.typed;
+      }
+
+      if (nextState.finishedAtMs !== null && onPlayerFinish) {
+        onPlayerFinish(nextState.finishedAtMs);
+      }
+    },
+    [onPlayerFinish]
+  );
+
+  // Block paste and drop explicitly
+  const handleBeforeInput = useCallback((e) => {
+    if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+      e.preventDefault();
+    }
+  }, []);
+
   const handlePaste = useCallback((e) => {
     e.preventDefault();
   }, []);
 
   const handleDrop = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
+  const handleCut = useCallback((e) => {
     e.preventDefault();
   }, []);
 
@@ -117,9 +173,13 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     resetTyping,
     inputProps: {
       ref: inputRef,
+      value: typingState.typed,
+      onChange: handleInputChange,
       onKeyDown: handleKeyDown,
+      onBeforeInput: handleBeforeInput,
       onPaste: handlePaste,
       onDrop: handleDrop,
+      onCut: handleCut,
       onFocus: () => setIsFocused(true),
       onBlur: () => setIsFocused(false),
       autoComplete: 'off',

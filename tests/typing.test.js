@@ -3,6 +3,7 @@ import {
   createTypingState,
   handleCharacterInput,
   handleBackspace,
+  applyInput,
   calculateAccuracy,
   calculateWpm,
 } from '../src/game/typingEngine.js';
@@ -174,4 +175,184 @@ describe('Typing Engine', () => {
     expect(postState.finishedAtMs).toBe(350);
     expect(postState.credited).toBe(3);
   });
+
+  // --- BUG 1 REPRODUCTION AND REGRESSION TESTS ---
+
+  it('Bug 1 repro: typing wrong char at end of word, Backspace, then right char clears isError, advances credited, expectedChar is space', () => {
+    // Passage: "Engage magnetic..."
+    const testPassage = 'Engage magnetic';
+    let state = createTypingState(testPassage);
+
+    // Type "Engag" correctly
+    for (const char of 'Engag') {
+      state = handleCharacterInput(state, char, 100);
+    }
+    expect(state.credited).toBe(5);
+    expect(state.wrongCount).toBe(0);
+
+    // Type wrong character at end of word 'e': type 'x'
+    state = handleCharacterInput(state, 'x', 200);
+    expect(state.wrongCount).toBe(1);
+    expect(state.isError).toBe(true);
+
+    // Backspace removes error
+    state = handleBackspace(state);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+
+    // Type correct character 'e'
+    state = handleCharacterInput(state, 'e', 300);
+    expect(state.credited).toBe(6);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe(' ');
+  });
+
+  it('Bug 1 repro: same at final character of passage finishes race cleanly', () => {
+    const testPassage = 'Win';
+    let state = createTypingState(testPassage);
+    state = handleCharacterInput(state, 'W', 10);
+    state = handleCharacterInput(state, 'i', 20);
+    expect(state.credited).toBe(2);
+
+    // Mistake on final char 'n'
+    state = handleCharacterInput(state, 'z', 30);
+    expect(state.credited).toBe(2);
+    expect(state.wrongCount).toBe(1);
+    expect(state.isError).toBe(true);
+
+    // Backspace
+    state = handleBackspace(state);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+
+    // Correct final char 'n'
+    state = handleCharacterInput(state, 'n', 50);
+    expect(state.credited).toBe(3);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBeUndefined();
+    expect(state.finishedAtMs).toBe(50);
+  });
+
+  it('Bug 1 repro: wrong char, Backspace, right char, then immediately type next word continues smoothly without extra Backspace', () => {
+    const testPassage = 'Go fast';
+    let state = createTypingState(testPassage);
+    state = handleCharacterInput(state, 'G', 10);
+    // Mistake on 'o'
+    state = handleCharacterInput(state, 'x', 20);
+    state = handleBackspace(state);
+    // Correct 'o'
+    state = handleCharacterInput(state, 'o', 30);
+    expect(state.credited).toBe(2);
+    expect(state.wrongCount).toBe(0);
+
+    // Immediately type ' ' and 'f'
+    state = handleCharacterInput(state, ' ', 40);
+    expect(state.credited).toBe(3);
+    expect(state.wrongCount).toBe(0);
+
+    state = handleCharacterInput(state, 'f', 50);
+    expect(state.credited).toBe(4);
+    expect(state.wrongCount).toBe(0);
+  });
+
+  it('2-character input event (fast typing) is processed as sequential keystrokes via applyInput', () => {
+    const testPassage = 'Speed';
+    let state = createTypingState(testPassage);
+
+    // Fast typing delivers 'Sp' in one input event
+    state = applyInput(state, 'Sp', 100);
+    expect(state.credited).toBe(2);
+    expect(state.wrongCount).toBe(0);
+    expect(state.keystrokes).toBe(2);
+    expect(state.correctKeystrokes).toBe(2);
+    expect(state.expectedChar).toBe('e');
+  });
+
+  it('paste events are blocked via applyInput with isPasteOrDrop flag', () => {
+    const testPassage = 'Speed';
+    let state = createTypingState(testPassage);
+    const pasted = applyInput(state, 'Speed', 100, true);
+    expect(pasted.typed).toBe('');
+    expect(pasted.credited).toBe(0);
+  });
+
+  it('wrong-buffer limit reached -> extra input ignored -> input value stays equal to engine typed -> Backspace recovers', () => {
+    const testPassage = 'Turbo';
+    let state = createTypingState(testPassage);
+    // Type 10 wrong characters via applyInput (buffer limit is MAX_WRONG_BUFFER = 5)
+    state = applyInput(state, 'zzzzzzzzzz', 100);
+    expect(state.wrongCount).toBe(MAX_WRONG_BUFFER);
+    expect(state.typed.length).toBe(MAX_WRONG_BUFFER);
+    expect(state.typed).toBe('zzzzz');
+
+    // Trying to type more is ignored
+    state = applyInput(state, 'zzzzzz', 110);
+    expect(state.typed).toBe('zzzzz');
+    expect(state.wrongCount).toBe(MAX_WRONG_BUFFER);
+
+    // Backspace 5 times recovers cleanly
+    for (let i = 0; i < MAX_WRONG_BUFFER; i++) {
+      state = handleBackspace(state);
+    }
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('T');
+
+    // Type correct 'T'
+    state = handleCharacterInput(state, 'T', 200);
+    expect(state.credited).toBe(1);
+    expect(state.wrongCount).toBe(0);
+    expect(state.expectedChar).toBe('u');
+  });
+
+  it('property test: credited never decreases and isError === (wrongCount > 0) across randomized operations', () => {
+    const testPassage = 'The quick cyber hovercraft jumps over six neon barriers.';
+    let state = createTypingState(testPassage);
+    let prevCredited = 0;
+
+    // Seeded random walk (using simple LCG)
+    let seed = 424242;
+    function rand() {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    }
+
+    for (let step = 0; step < 300; step++) {
+      const roll = rand();
+      if (roll < 0.25) {
+        // Backspace
+        state = handleBackspace(state);
+      } else if (roll < 0.65) {
+        // Correct character (or try to)
+        const nextExpected = testPassage[state.credited];
+        if (nextExpected) {
+          state = handleCharacterInput(state, nextExpected, step * 10);
+        }
+      } else {
+        // Wrong character
+        const wrongChar = String.fromCharCode(65 + Math.floor(rand() * 26));
+        state = handleCharacterInput(state, wrongChar, step * 10);
+      }
+
+      // Assert invariant 1: credited never decreases
+      expect(state.credited).toBeGreaterThanOrEqual(prevCredited);
+      prevCredited = state.credited;
+
+      // Assert invariant 2: isError always strictly equals wrongCount > 0
+      expect(state.isError).toBe(state.wrongCount > 0);
+
+      // Assert invariant 3: wrongCount is never negative
+      expect(state.wrongCount).toBeGreaterThanOrEqual(0);
+
+      // Assert invariant 4: wrongCount is bounded by MAX_WRONG_BUFFER
+      expect(state.wrongCount).toBeLessThanOrEqual(MAX_WRONG_BUFFER);
+
+      if (state.finishedAtMs !== null) {
+        break;
+      }
+    }
+  });
 });
+
