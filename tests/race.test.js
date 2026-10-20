@@ -7,7 +7,7 @@ import {
   createRacerLaneList,
 } from '../src/game/raceEngine.js';
 import { generateBotSchedules } from '../src/game/botEngine.js';
-import { PLAYER_INFO, POST_WINNER_WINDOW_MS, RACE_HARD_CAP_MS } from '../src/game/config.js';
+import { PLAYER_INFO, POST_WINNER_WINDOW_MS, RACE_HARD_CAP_MS, BOT_ROSTER } from '../src/game/config.js';
 
 describe('Race Engine', () => {
   const passageLength = 100;
@@ -143,7 +143,7 @@ describe('Race Engine', () => {
     const lanes = createRacerLaneList(botEntries, PLAYER_INFO);
 
     const botNames = lanes.filter((r) => !r.isPlayer).map((b) => b.name);
-    expect(botNames).toEqual(['NOVA', 'PHANTOM', 'APEX', 'GLITCH', 'ONYX']);
+    expect(botNames).toEqual(BOT_ROSTER.map((b) => b.name));
 
     const playerRacer = lanes.find((r) => r.isPlayer);
     expect(playerRacer.name).toBe('YOU');

@@ -6,33 +6,17 @@ import {
 } from '../game/typingEngine.js';
 
 /**
+ * Maximum number of debug log entries to keep in memory.
+ * Older entries are discarded to prevent memory issues.
+ */
+const MAX_DEBUG_LOG = 80;
+
+/**
  * Hook managing hidden input focus and typing interactions.
  * 
- * Architecture (mobile-compatible, v2 — fixes Android GBoard composition bug):
- *
- * ROOT CAUSE OF PREVIOUS BUG:
- * Android GBoard (and many mobile virtual keyboards) fires compositionStart /
- * compositionEnd for **every regular Latin keystroke**, not just for CJK IME.
- * The previous code skipped onChange when composingRef was true, which meant
- * that on Android almost every character was silently dropped by onChange.
- * The compositionEnd handler then tried to re-process via handleInputChange(e),
- * but `e` was the CompositionEvent (not an InputEvent), and on many browsers
- * `e.target.value` at that point was stale or reflected only the composed
- * segment, not the full input value. This caused a mismatch between what the
- * engine expected (`state.typed`) and what the DOM actually contained, leading
- * to every character after the first being treated as wrong.
- *
- * FIX:
- * - onChange is NEVER skipped based on composition state. It always reads
- *   `inputRef.current.value` (the live DOM value) and diffs it against
- *   `state.typed` via `applyInput`. This is safe because `applyInput` is
- *   idempotent when the value hasn't changed (returns the same state).
- * - compositionEnd also reads `inputRef.current.value` instead of relying on
- *   the event object, ensuring the full accumulated input is processed.
- * - Backspace is still handled in keydown with preventDefault to keep the
- *   DOM input value synchronized with engine state.
- * - Paste, drop, cut are still blocked.
- * - The input remains UNCONTROLLED (no `value` prop).
+ * Includes diagnostic instrumentation: every input-related event is recorded
+ * to debugLogRef with full before/after state. The debug log is surfaced to
+ * consumers via the returned object so a DebugPanel can render it.
  */
 export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   const [typingState, setTypingState] = useState(() => createTypingState(passage));
@@ -51,12 +35,31 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   onFirstKeyRef.current = onFirstKey;
   const firstKeyFiredRef = useRef(false);
 
+  // ─── DIAGNOSTIC INSTRUMENTATION ───────────────────────────────────────
+  // Debug log: ring buffer of event records, newest last.
+  const debugLogRef = useRef([]);
+  // Counter to force re-renders of the debug panel when log updates.
+  const [debugTick, setDebugTick] = useState(0);
+  // Track composition state for diagnostic display (NOT used for gating).
+  const composingRef = useRef(false);
+
+  function pushDebugEntry(entry) {
+    const log = debugLogRef.current;
+    log.push({ ...entry, ts: Date.now() });
+    if (log.length > MAX_DEBUG_LOG) {
+      log.splice(0, log.length - MAX_DEBUG_LOG);
+    }
+    setDebugTick((t) => t + 1);
+  }
+  // ─── END DIAGNOSTIC INSTRUMENTATION ───────────────────────────────────
+
   // Reset typing state when passage changes
   const resetTyping = useCallback((newPassage) => {
     const fresh = createTypingState(newPassage);
     typingStateRef.current = fresh;
     setTypingState(fresh);
     firstKeyFiredRef.current = false;
+    debugLogRef.current = [];
     if (inputRef.current) {
       inputRef.current.value = '';
     }
@@ -77,48 +80,115 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   /**
    * Core input processing function.
    * Reads the LIVE DOM input value and diffs it against engine state.
-   * This is the single authoritative code path for character input on
-   * all platforms (desktop keyboard, mobile virtual keyboard, IME).
    */
   const processInputValue = useCallback(
-    () => {
+    (eventSource) => {
       if (!inputRef.current) return;
 
-      const newValue = inputRef.current.value;
+      const domValue = inputRef.current.value;
+      const stateBefore = typingStateRef.current;
 
       if (!isRacingRef.current) {
-        inputRef.current.value = typingStateRef.current.typed;
+        pushDebugEntry({
+          evt: eventSource,
+          domVal: domValue,
+          engineTyped: stateBefore.typed,
+          result: 'SKIP:not-racing',
+          composing: composingRef.current,
+        });
+        inputRef.current.value = stateBefore.typed;
         return;
       }
 
-      const currentState = typingStateRef.current;
-      if (currentState.finishedAtMs !== null) {
-        inputRef.current.value = currentState.typed;
+      if (stateBefore.finishedAtMs !== null) {
+        pushDebugEntry({
+          evt: eventSource,
+          domVal: domValue,
+          engineTyped: stateBefore.typed,
+          result: 'SKIP:finished',
+          composing: composingRef.current,
+        });
+        inputRef.current.value = stateBefore.typed;
         return;
       }
 
-      // No change — nothing to process (idempotent guard)
-      if (newValue === currentState.typed) {
+      // Idempotent guard
+      if (domValue === stateBefore.typed) {
+        pushDebugEntry({
+          evt: eventSource,
+          domVal: domValue,
+          engineTyped: stateBefore.typed,
+          result: 'SKIP:no-change',
+          composing: composingRef.current,
+        });
         return;
       }
 
       // Fire onFirstKey on the very first character input
-      if (!firstKeyFiredRef.current && onFirstKeyRef.current && currentState.keystrokes === 0) {
-        if (newValue.length > currentState.typed.length) {
+      if (!firstKeyFiredRef.current && onFirstKeyRef.current && stateBefore.keystrokes === 0) {
+        if (domValue.length > stateBefore.typed.length) {
           firstKeyFiredRef.current = true;
           onFirstKeyRef.current();
         }
       }
 
       const nowMs = performance.now();
-      const nextState = applyInput(currentState, newValue, nowMs);
+      const nextState = applyInput(stateBefore, domValue, nowMs);
+
+      // ─── DIAGNOSTIC: detailed before/after comparison ────────────
+      const isDeletion = domValue.length < stateBefore.typed.length;
+      const appended = isDeletion ? '' : domValue.slice(stateBefore.typed.length);
+      const expectedChar = stateBefore.passage[stateBefore.credited];
+      const expectedCharCode = expectedChar ? expectedChar.charCodeAt(0) : undefined;
+      const appendedCharCodes = appended ? [...appended].map(c => c.charCodeAt(0)) : [];
+
+      let resultTag;
+      if (nextState.credited > stateBefore.credited) {
+        resultTag = `OK: Credited ${stateBefore.credited} -> ${nextState.credited} (matched "${expectedChar}")`;
+      } else if (nextState.wrongCount > stateBefore.wrongCount) {
+        if (stateBefore.wrongCount === 0) {
+          resultTag = `ERR: Mismatch! Got "${appended}" [${appendedCharCodes.join(',')}] vs Expected "${expectedChar}" [${expectedCharCode}]`;
+        } else {
+          resultTag = `ERR: Extra wrong char "${appended}" (wrongCount ${stateBefore.wrongCount} -> ${nextState.wrongCount})`;
+        }
+      } else if (isDeletion) {
+        resultTag = `DEL: Removed ${stateBefore.typed.length - domValue.length} char(s) (wrongCount ${stateBefore.wrongCount} -> ${nextState.wrongCount})`;
+      } else if (nextState === stateBefore) {
+        if (domValue.length === stateBefore.typed.length && domValue !== stateBefore.typed) {
+          resultTag = `REJECTED: DOM value replaced with same length ("${domValue}" vs "${stateBefore.typed}")`;
+        } else if (stateBefore.wrongCount >= 10) {
+          resultTag = `REJECTED: Wrong buffer full (wrongCount=${stateBefore.wrongCount} >= 10), input blocked`;
+        } else if (!domValue.startsWith(stateBefore.typed)) {
+          resultTag = `REJECTED: Prefix mismatch (DOM "${domValue}" does not start with typed "${stateBefore.typed}")`;
+        } else {
+          resultTag = `REJECTED: applyInput returned same state (no change detected)`;
+        }
+      } else {
+        resultTag = `UPDATED: credited=${nextState.credited}, wrongCount=${nextState.wrongCount}`;
+      }
+
+      pushDebugEntry({
+        evt: eventSource,
+        domVal: domValue,
+        engineTypedBefore: stateBefore.typed,
+        engineTypedAfter: nextState.typed,
+        appended: appended || (isDeletion ? `[DEL ${stateBefore.typed.length - domValue.length}]` : ''),
+        creditedBefore: stateBefore.credited,
+        creditedAfter: nextState.credited,
+        wrongBefore: stateBefore.wrongCount,
+        wrongAfter: nextState.wrongCount,
+        expectedChar,
+        expectedCharCode,
+        appendedCharCodes,
+        result: resultTag,
+        composing: composingRef.current,
+      });
+      // ─── END DIAGNOSTIC ──────────────────────────────────────────
 
       typingStateRef.current = nextState;
       setTypingState(nextState);
 
       // Sync the input element to the engine's typed value.
-      // Critical when the engine rejects or clamps input
-      // (e.g., wrong buffer full, paste blocked, deletion past lock boundary).
       inputRef.current.value = nextState.typed;
 
       if (nextState.finishedAtMs !== null && onPlayerFinish) {
@@ -129,13 +199,25 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   );
 
   // Handle keydown — ONLY for Backspace.
-  // All character input goes through onChange / processInputValue.
   const handleKeyDown = useCallback(
     (e) => {
       // Allow Tab, Escape, and browser navigation keys to function normally
       if (e.key === 'Tab' || e.key === 'Escape' || e.altKey || e.ctrlKey || e.metaKey) {
         return;
       }
+
+      // ─── DIAGNOSTIC: log every keydown ────────────────────────────
+      pushDebugEntry({
+        evt: 'keydown',
+        key: e.key,
+        code: e.code,
+        isComposing: e.isComposing,
+        composing: composingRef.current,
+        domVal: inputRef.current?.value,
+        engineTyped: typingStateRef.current.typed,
+        result: e.key === 'Backspace' ? 'WILL-HANDLE' : 'PASS-THROUGH',
+      });
+      // ─── END DIAGNOSTIC ───────────────────────────────────────────
 
       if (!isRacingRef.current) {
         return;
@@ -162,34 +244,58 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     []
   );
 
-  // Handle onChange — fires on every input value change on all platforms.
-  // On Android GBoard this may fire during or after composition — that's fine,
-  // processInputValue reads the live DOM value and diffs idempotently.
+  // Handle onChange
   const handleInputChange = useCallback(
     () => {
-      processInputValue();
+      processInputValue('onChange');
     },
     [processInputValue]
   );
 
-  // Composition events: do NOT gate onChange.
-  // compositionEnd triggers an extra processInputValue call to ensure the
-  // final composed value is captured even if onChange fired before
-  // compositionEnd (browser-dependent ordering).
-  const handleCompositionStart = useCallback(() => {
-    // No-op: we intentionally do NOT set a composing flag.
-    // onChange is allowed to fire during composition.
+  // Composition events
+  const handleCompositionStart = useCallback((e) => {
+    composingRef.current = true;
+    pushDebugEntry({
+      evt: 'compositionStart',
+      data: e.data,
+      domVal: inputRef.current?.value,
+      engineTyped: typingStateRef.current.typed,
+      composing: true,
+    });
   }, []);
 
-  const handleCompositionEnd = useCallback(() => {
-    // Process the final composed value from the live DOM.
-    // This is a safety net: if onChange already processed this value,
-    // processInputValue will see no diff and return immediately (idempotent).
-    processInputValue();
+  const handleCompositionUpdate = useCallback((e) => {
+    pushDebugEntry({
+      evt: 'compositionUpdate',
+      data: e.data,
+      domVal: inputRef.current?.value,
+      engineTyped: typingStateRef.current.typed,
+      composing: true,
+    });
+  }, []);
+
+  const handleCompositionEnd = useCallback((e) => {
+    pushDebugEntry({
+      evt: 'compositionEnd',
+      data: e.data,
+      domVal: inputRef.current?.value,
+      engineTyped: typingStateRef.current.typed,
+      composing: false,
+    });
+    composingRef.current = false;
+    processInputValue('compositionEnd');
   }, [processInputValue]);
 
   // Block paste and drop explicitly
   const handleBeforeInput = useCallback((e) => {
+    pushDebugEntry({
+      evt: 'beforeInput',
+      inputType: e.inputType,
+      data: e.data,
+      domVal: inputRef.current?.value,
+      engineTyped: typingStateRef.current.typed,
+      composing: composingRef.current,
+    });
     if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
       e.preventDefault();
     }
@@ -223,15 +329,16 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     setIsFocused,
     focusInput,
     resetTyping,
+    // Diagnostic data exposed for DebugPanel
+    debugLogRef,
+    debugTick,
     inputProps: {
       ref: inputRef,
-      // NO `value` prop — input is uncontrolled to avoid React fighting
-      // with mobile virtual keyboards over the input's native value.
-      // The input value is synced manually via inputRef.current.value.
       defaultValue: '',
       onChange: handleInputChange,
       onKeyDown: handleKeyDown,
       onCompositionStart: handleCompositionStart,
+      onCompositionUpdate: handleCompositionUpdate,
       onCompositionEnd: handleCompositionEnd,
       onBeforeInput: handleBeforeInput,
       onPaste: handlePaste,
@@ -253,3 +360,4 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     },
   };
 }
+
