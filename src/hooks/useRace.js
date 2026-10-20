@@ -20,7 +20,7 @@ import { calculateWpm, calculateAccuracy } from '../game/typingEngine.js';
 
 export function useRace() {
   const [phase, setPhase] = useState('start'); // 'start' | 'countdown' | 'racing' | 'results'
-  const [difficulty, setDifficulty] = useState('medium');
+  const [difficulty, setDifficulty] = useState(null);
   const [countdownValue, setCountdownValue] = useState(3); // 3, 2, 1, 'GO!'
   const [passage, setPassage] = useState(() => getRandomPassage());
   const [seed, setSeed] = useState(() => parseSeedFromUrl() ?? Math.floor(Math.random() * 1000000));
@@ -205,6 +205,9 @@ export function useRace() {
 
   // Starts the countdown sequence
   const startRace = useCallback(() => {
+    if (!difficulty) {
+      return;
+    }
     stopLoop();
     // Choose fresh seed if not locked via URL
     const activeSeed = parseSeedFromUrl() ?? Math.floor(Math.random() * 1000000);
@@ -276,6 +279,7 @@ export function useRace() {
   // Change difficulty / return to start screen
   const goToStart = useCallback(() => {
     stopLoop();
+    setDifficulty(null);
     setPhase('start');
   }, [stopLoop]);
 

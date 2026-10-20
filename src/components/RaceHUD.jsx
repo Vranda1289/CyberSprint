@@ -6,7 +6,7 @@ export function RaceHUD({
   accuracy = 100,
   playerRank = 1,
   elapsedMs = 0,
-  difficulty = 'medium',
+  difficulty = '',
   progressPct = 0,
   winner = null,
   isPlayerFinished = false,

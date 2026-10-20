@@ -9,7 +9,7 @@ export function ResultsScreen({
   playerWpm = 0,
   playerAccuracy = 100,
   elapsedMs = 0,
-  difficulty = 'medium',
+  difficulty = '',
   onPlayAgain,
   onChangeDifficulty,
 }) {

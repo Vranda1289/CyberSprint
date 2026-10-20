@@ -56,11 +56,18 @@ export function StartScreen({ difficulty, onSelectDifficulty, onStartRace }) {
           id="start-race-btn"
           type="button"
           className="start-race-button"
+          disabled={!difficulty}
           onClick={onStartRace}
         >
           <span className="btn-glitch-text">START RACE</span>
           <span className="btn-icon">▶</span>
         </button>
+
+        {!difficulty && (
+          <div className="start-selection-hint" role="status">
+            Select a difficulty to start
+          </div>
+        )}
       </div>
     </div>
   );

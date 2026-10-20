@@ -19,7 +19,10 @@ import { lerp, clamp } from './raceUtils.js';
  * @returns {Array<{ bot: object, schedule: number[], targetWpm: number, accuracy: number, finishTimeMs: number }>}
  */
 export function generateBotSchedules(passage, difficulty, raceSeed) {
-  const profile = DIFFICULTY_PROFILES[difficulty] || DIFFICULTY_PROFILES.medium;
+  const profile = DIFFICULTY_PROFILES[difficulty];
+  if (!profile) {
+    throw new Error(`Invalid or missing difficulty: "${difficulty}"`);
+  }
   const passageLength = passage.length;
   const numBots = BOT_ROSTER.length;
 
