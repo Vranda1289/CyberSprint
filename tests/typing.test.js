@@ -354,5 +354,149 @@ describe('Typing Engine', () => {
       }
     }
   });
+
+  // --- MOBILE TYPING BUG (Android GBoard composition) REGRESSION TESTS ---
+  // These tests simulate what happens on Android: each keystroke arrives as
+  // an applyInput call with the cumulative input value (the same way onChange
+  // delivers the DOM input's value). This is the exact code path that was
+  // broken when composition events caused onChange to be skipped.
+
+  it('Mobile repro: sequential "Engage" via applyInput (simulating onChange with cumulative values)', () => {
+    const testPassage = 'Engage magnetic dampeners';
+    let state = createTypingState(testPassage);
+
+    // Simulate Android GBoard: each keystroke updates the input value cumulatively
+    state = applyInput(state, 'E', 100);
+    expect(state.credited).toBe(1);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('n');
+
+    state = applyInput(state, 'En', 200);
+    expect(state.credited).toBe(2);
+    expect(state.wrongCount).toBe(0);
+    expect(state.expectedChar).toBe('g');
+
+    state = applyInput(state, 'Eng', 300);
+    expect(state.credited).toBe(3);
+    expect(state.expectedChar).toBe('a');
+
+    state = applyInput(state, 'Enga', 400);
+    expect(state.credited).toBe(4);
+    expect(state.expectedChar).toBe('g');
+
+    state = applyInput(state, 'Engag', 500);
+    expect(state.credited).toBe(5);
+    expect(state.expectedChar).toBe('e');
+
+    state = applyInput(state, 'Engage', 600);
+    expect(state.credited).toBe(6);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe(' ');
+  });
+
+  it('Mobile repro: wrong char followed by Backspace and correct char', () => {
+    const testPassage = 'Engage';
+    let state = createTypingState(testPassage);
+
+    // Type E correctly
+    state = applyInput(state, 'E', 100);
+    expect(state.credited).toBe(1);
+
+    // Type wrong char 'x' instead of 'n'
+    state = applyInput(state, 'Ex', 200);
+    expect(state.credited).toBe(1);
+    expect(state.wrongCount).toBe(1);
+    expect(state.isError).toBe(true);
+
+    // Backspace (remove 'x', input value back to 'E')
+    state = handleBackspace(state);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.typed).toBe('E');
+
+    // Now type correct 'n' — input value is 'En'
+    state = applyInput(state, 'En', 300);
+    expect(state.credited).toBe(2);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('g');
+  });
+
+  it('Mobile repro: multiple characters arriving in a single input change', () => {
+    const testPassage = 'Engage';
+    let state = createTypingState(testPassage);
+
+    // Android autocomplete might deliver 'Eng' in one shot
+    state = applyInput(state, 'Eng', 100);
+    expect(state.credited).toBe(3);
+    expect(state.wrongCount).toBe(0);
+    expect(state.keystrokes).toBe(3);
+    expect(state.correctKeystrokes).toBe(3);
+  });
+
+  it('Mobile repro: spaces and punctuation work correctly via applyInput', () => {
+    const testPassage = 'Go, now!';
+    let state = createTypingState(testPassage);
+
+    state = applyInput(state, 'G', 100);
+    state = applyInput(state, 'Go', 200);
+    state = applyInput(state, 'Go,', 300);
+    state = applyInput(state, 'Go, ', 400);
+    state = applyInput(state, 'Go, n', 500);
+    state = applyInput(state, 'Go, no', 600);
+    state = applyInput(state, 'Go, now', 700);
+    state = applyInput(state, 'Go, now!', 800);
+
+    expect(state.credited).toBe(8);
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.finishedAtMs).toBe(800);
+  });
+
+  it('Mobile repro: passage completion triggers finishedAtMs', () => {
+    const testPassage = 'Win';
+    let state = createTypingState(testPassage);
+
+    state = applyInput(state, 'W', 100);
+    state = applyInput(state, 'Wi', 200);
+    expect(state.finishedAtMs).toBeNull();
+
+    state = applyInput(state, 'Win', 300);
+    expect(state.credited).toBe(3);
+    expect(state.finishedAtMs).toBe(300);
+
+    // Further input after finish is rejected
+    state = applyInput(state, 'Win!', 400);
+    expect(state.finishedAtMs).toBe(300);
+    expect(state.typed).toBe('Win');
+  });
+
+  it('Mobile repro: idempotent — same value delivered twice does not double-count', () => {
+    const testPassage = 'Engage';
+    let state = createTypingState(testPassage);
+
+    state = applyInput(state, 'E', 100);
+    expect(state.credited).toBe(1);
+    expect(state.keystrokes).toBe(1);
+
+    // Same value again (simulates onChange + compositionEnd both firing)
+    state = applyInput(state, 'E', 150);
+    expect(state.credited).toBe(1);
+    expect(state.keystrokes).toBe(1); // NOT double-counted
+  });
+
+  it('Desktop regression: handleCharacterInput still works for direct keystroke processing', () => {
+    const testPassage = 'Engage';
+    let state = createTypingState(testPassage);
+
+    for (const char of 'Engage') {
+      state = handleCharacterInput(state, char, 100);
+    }
+    expect(state.credited).toBe(6);
+    expect(state.wrongCount).toBe(0);
+    expect(state.finishedAtMs).toBe(100);
+  });
 });
 

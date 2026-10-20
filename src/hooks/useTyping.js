@@ -8,22 +8,31 @@ import {
 /**
  * Hook managing hidden input focus and typing interactions.
  * 
- * Architecture (mobile-compatible):
- * - The input is UNCONTROLLED (no `value` prop). React does not fight the
- *   native input value, which is critical for mobile virtual keyboards that
- *   do not reliably fire keydown with the actual character.
- * - onChange (via applyInput) is the SOLE source of character input on all
- *   platforms. This avoids the dual-processing bug where keydown processes
- *   a character and then onChange re-processes the same character from the
- *   native input value.
- * - keydown is used ONLY for Backspace (which fires reliably on all
- *   platforms) with e.preventDefault() to keep the input value in sync.
- * - Composition events (IME) are tracked to skip onChange during active
- *   composition, preventing partial/duplicate input from CJK keyboards
- *   or mobile predictive text.
- * - Blocks paste, drop, cut via onPaste/onDrop/onCut and onBeforeInput.
- * - Synchronizes with passage changes via useEffect.
- * - Does not trap Tab or Escape.
+ * Architecture (mobile-compatible, v2 — fixes Android GBoard composition bug):
+ *
+ * ROOT CAUSE OF PREVIOUS BUG:
+ * Android GBoard (and many mobile virtual keyboards) fires compositionStart /
+ * compositionEnd for **every regular Latin keystroke**, not just for CJK IME.
+ * The previous code skipped onChange when composingRef was true, which meant
+ * that on Android almost every character was silently dropped by onChange.
+ * The compositionEnd handler then tried to re-process via handleInputChange(e),
+ * but `e` was the CompositionEvent (not an InputEvent), and on many browsers
+ * `e.target.value` at that point was stale or reflected only the composed
+ * segment, not the full input value. This caused a mismatch between what the
+ * engine expected (`state.typed`) and what the DOM actually contained, leading
+ * to every character after the first being treated as wrong.
+ *
+ * FIX:
+ * - onChange is NEVER skipped based on composition state. It always reads
+ *   `inputRef.current.value` (the live DOM value) and diffs it against
+ *   `state.typed` via `applyInput`. This is safe because `applyInput` is
+ *   idempotent when the value hasn't changed (returns the same state).
+ * - compositionEnd also reads `inputRef.current.value` instead of relying on
+ *   the event object, ensuring the full accumulated input is processed.
+ * - Backspace is still handled in keydown with preventDefault to keep the
+ *   DOM input value synchronized with engine state.
+ * - Paste, drop, cut are still blocked.
+ * - The input remains UNCONTROLLED (no `value` prop).
  */
 export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
   const [typingState, setTypingState] = useState(() => createTypingState(passage));
@@ -36,9 +45,6 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
 
   const isRacingRef = useRef(isRacing);
   isRacingRef.current = isRacing;
-
-  // Track IME composition state to skip onChange during active composition
-  const composingRef = useRef(false);
 
   // Track whether onFirstKey has been called (ref for stable closure access)
   const onFirstKeyRef = useRef(onFirstKey);
@@ -68,8 +74,62 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
     }
   }, []);
 
+  /**
+   * Core input processing function.
+   * Reads the LIVE DOM input value and diffs it against engine state.
+   * This is the single authoritative code path for character input on
+   * all platforms (desktop keyboard, mobile virtual keyboard, IME).
+   */
+  const processInputValue = useCallback(
+    () => {
+      if (!inputRef.current) return;
+
+      const newValue = inputRef.current.value;
+
+      if (!isRacingRef.current) {
+        inputRef.current.value = typingStateRef.current.typed;
+        return;
+      }
+
+      const currentState = typingStateRef.current;
+      if (currentState.finishedAtMs !== null) {
+        inputRef.current.value = currentState.typed;
+        return;
+      }
+
+      // No change — nothing to process (idempotent guard)
+      if (newValue === currentState.typed) {
+        return;
+      }
+
+      // Fire onFirstKey on the very first character input
+      if (!firstKeyFiredRef.current && onFirstKeyRef.current && currentState.keystrokes === 0) {
+        if (newValue.length > currentState.typed.length) {
+          firstKeyFiredRef.current = true;
+          onFirstKeyRef.current();
+        }
+      }
+
+      const nowMs = performance.now();
+      const nextState = applyInput(currentState, newValue, nowMs);
+
+      typingStateRef.current = nextState;
+      setTypingState(nextState);
+
+      // Sync the input element to the engine's typed value.
+      // Critical when the engine rejects or clamps input
+      // (e.g., wrong buffer full, paste blocked, deletion past lock boundary).
+      inputRef.current.value = nextState.typed;
+
+      if (nextState.finishedAtMs !== null && onPlayerFinish) {
+        onPlayerFinish(nextState.finishedAtMs);
+      }
+    },
+    [onPlayerFinish]
+  );
+
   // Handle keydown — ONLY for Backspace.
-  // All character input goes through onChange to avoid the mobile dual-processing bug.
+  // All character input goes through onChange / processInputValue.
   const handleKeyDown = useCallback(
     (e) => {
       // Allow Tab, Escape, and browser navigation keys to function normally
@@ -98,79 +158,35 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
       }
 
       // Do NOT process characters here. Let them flow through to onChange.
-      // On desktop, the native input will update and fire onChange.
-      // On mobile, the virtual keyboard also updates the native input and fires onChange.
-      // This is the key fix: a single code path for character input on all platforms.
     },
     []
   );
 
-  // Handle onChange — the SOLE source of character input for all platforms.
-  // applyInput diffs the new input value against the current typed state
-  // and processes any appended characters or deletions atomically.
+  // Handle onChange — fires on every input value change on all platforms.
+  // On Android GBoard this may fire during or after composition — that's fine,
+  // processInputValue reads the live DOM value and diffs idempotently.
   const handleInputChange = useCallback(
-    (e) => {
-      // Skip onChange during active IME composition
-      if (composingRef.current) {
-        return;
-      }
-
-      if (!isRacingRef.current) {
-        if (inputRef.current) {
-          inputRef.current.value = typingStateRef.current.typed;
-        }
-        return;
-      }
-
-      const currentState = typingStateRef.current;
-      if (currentState.finishedAtMs !== null) {
-        if (inputRef.current) {
-          inputRef.current.value = currentState.typed;
-        }
-        return;
-      }
-
-      // Fire onFirstKey on the very first character input
-      if (!firstKeyFiredRef.current && onFirstKeyRef.current && currentState.keystrokes === 0) {
-        const newValue = e.target.value;
-        if (newValue.length > currentState.typed.length) {
-          firstKeyFiredRef.current = true;
-          onFirstKeyRef.current();
-        }
-      }
-
-      const nowMs = performance.now();
-      const nextState = applyInput(currentState, e.target.value, nowMs);
-
-      typingStateRef.current = nextState;
-      setTypingState(nextState);
-
-      // Sync the input element to the engine's typed value.
-      // This is important when the engine rejects or clamps input
-      // (e.g., wrong buffer full, paste blocked).
-      if (inputRef.current) {
-        inputRef.current.value = nextState.typed;
-      }
-
-      if (nextState.finishedAtMs !== null && onPlayerFinish) {
-        onPlayerFinish(nextState.finishedAtMs);
-      }
+    () => {
+      processInputValue();
     },
-    [onPlayerFinish]
+    [processInputValue]
   );
 
-  // Composition event handlers for IME input
+  // Composition events: do NOT gate onChange.
+  // compositionEnd triggers an extra processInputValue call to ensure the
+  // final composed value is captured even if onChange fired before
+  // compositionEnd (browser-dependent ordering).
   const handleCompositionStart = useCallback(() => {
-    composingRef.current = true;
+    // No-op: we intentionally do NOT set a composing flag.
+    // onChange is allowed to fire during composition.
   }, []);
 
-  const handleCompositionEnd = useCallback((e) => {
-    composingRef.current = false;
-    // Manually trigger input processing with the composed result.
-    // Some browsers fire onChange before compositionend, some after.
-    // Calling handleInputChange here ensures the final composed text is processed.
-    handleInputChange(e);
-  }, [handleInputChange]);
+  const handleCompositionEnd = useCallback(() => {
+    // Process the final composed value from the live DOM.
+    // This is a safety net: if onChange already processed this value,
+    // processInputValue will see no diff and return immediately (idempotent).
+    processInputValue();
+  }, [processInputValue]);
 
   // Block paste and drop explicitly
   const handleBeforeInput = useCallback((e) => {
@@ -228,10 +244,11 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
       autoCorrect: 'off',
       autoCapitalize: 'off',
       spellCheck: 'false',
+      'data-form-type': 'other',
+      'data-lpignore': 'true',
+      inputMode: 'text',
       tabIndex: 0,
       'aria-label': 'Typing Input Area',
-      // Mobile UX: prevent zoom on focus, use a text input type
-      // that doesn't trigger special mobile keyboard modes
       enterKeyHint: 'done',
     },
   };
