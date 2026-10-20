@@ -1,0 +1,66 @@
+/* CyberSprint Design Tokens - Section 8 Palette & Typography */
+:root {
+  /* Colors */
+  --color-void: #05070D;
+  --color-navy: #0A1020;
+  --color-panel: #0F1830;
+  --color-panel-trans: rgba(15, 24, 48, 0.85);
+  --color-steel: #1B2742;
+  --color-grid-line: #22345A;
+  --color-cyan: #19E6FF; /* Primary neon */
+  --color-blue: #3D7BFF;
+  --color-violet: #A56BFF;
+  --color-crimson: #FF3B5C;
+  --color-amber: #FFB020;
+  --color-lime: #9BEA3A;
+  --color-text: #E6F1FF;
+  --color-muted: #8CA3C7;
+  --color-correct: #4DFFB0;
+  --color-error: #FF4D6D;
+
+  /* Bot Colors */
+  --color-bot-volt: #FF3B5C;
+  --color-bot-nyx: #FFB020;
+  --color-bot-kage: #9BEA3A;
+  --color-bot-rusty: #A56BFF;
+  --color-bot-zero: #3D7BFF;
+  --color-player: #19E6FF;
+
+  /* Typography */
+  --font-logo: 'Orbitron', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Orbitron', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Borders & Radii */
+  --border-subtle: 1px solid var(--color-grid-line);
+  --border-neon: 1px solid rgba(25, 230, 255, 0.4);
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+
+  /* Glows and Shadows */
+  --glow-cyan: 0 0 15px rgba(25, 230, 255, 0.35);
+  --glow-cyan-strong: 0 0 25px rgba(25, 230, 255, 0.6);
+  --glow-crimson: 0 0 15px rgba(255, 59, 92, 0.35);
+  --glow-correct: 0 0 12px rgba(77, 255, 176, 0.4);
+  --glow-error: 0 0 12px rgba(255, 77, 109, 0.4);
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.6);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.4s ease;
+
+  /* Clip-path for angular cyberpunk corners */
+  --clip-corner-sm: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  --clip-corner-md: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
