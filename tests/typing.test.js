@@ -424,6 +424,54 @@ describe('Typing Engine', () => {
     expect(state.expectedChar).toBe('g');
   });
 
+  it('Mobile repro: exact diagnostic bug where Gboard inserts at caret 0 (e.g. "aW" after "W")', () => {
+    // Exact diagnostic case: passage starts with "War" or "Engage"
+    const testPassage = 'Warriors of the neon grid';
+    let state = createTypingState(testPassage);
+
+    // Event 4: User types 'W'
+    state = applyInput(state, 'W', 100);
+    expect(state.credited).toBe(1);
+    expect(state.typed).toBe('W');
+    expect(state.wrongCount).toBe(0);
+    expect(state.expectedChar).toBe('a');
+
+    // Event 6 & 7: Gboard inserts 'a' at caret position 0 -> DOM value becomes "aW"
+    // Previously, newInputValue.slice(1) sliced "aW" -> "W", causing mismatch with expected 'a'.
+    // Now, extractInsertedText recognizes 'W' as common suffix and extracts 'a'.
+    state = applyInput(state, 'aW', 200);
+    expect(state.credited).toBe(2);
+    expect(state.typed).toBe('Wa');
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('r');
+
+    // Subsequent keystroke 'r' with prepended caret position: "rWa"
+    state = applyInput(state, 'rWa', 300);
+    expect(state.credited).toBe(3);
+    expect(state.typed).toBe('War');
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('r');
+  });
+
+  it('Mobile repro: diagnostic Event 22 with space appended or multi-char burst ("e ")', () => {
+    const testPassage = 'Engage magnetic dampeners';
+    let state = createTypingState(testPassage);
+
+    // Type "Engag" (5 characters: E-n-g-a-g)
+    state = applyInput(state, 'Engag', 100);
+    expect(state.credited).toBe(5);
+
+    // Autocomplete/keyboard delivers "e " (e + space) in one event
+    state = applyInput(state, 'Engage ', 200);
+    expect(state.credited).toBe(7);
+    expect(state.typed).toBe('Engage ');
+    expect(state.wrongCount).toBe(0);
+    expect(state.isError).toBe(false);
+    expect(state.expectedChar).toBe('m');
+  });
+
   it('Mobile repro: multiple characters arriving in a single input change', () => {
     const testPassage = 'Engage';
     let state = createTypingState(testPassage);

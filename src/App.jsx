@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRace } from './hooks/useRace.js';
 import { useTyping } from './hooks/useTyping.js';
 import { StartScreen } from './components/StartScreen.jsx';
@@ -6,7 +6,6 @@ import { Countdown } from './components/Countdown.jsx';
 import { RaceTrack } from './components/RaceTrack.jsx';
 import { RaceHUD } from './components/RaceHUD.jsx';
 import { TypingPanel } from './components/TypingPanel.jsx';
-import { DebugPanel } from './components/DebugPanel.jsx';
 import { ResultsScreen } from './components/ResultsScreen.jsx';
 import { MuteToggle } from './components/MuteToggle.jsx';
 import {
@@ -23,14 +22,6 @@ import './styles/race-screen.css';
 import './styles/results-screen.css';
 
 export default function App() {
-  const [showDebug, setShowDebug] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.has('debug') || import.meta.env.DEV;
-    }
-    return false;
-  });
-
   const {
     phase,
     difficulty,
@@ -55,9 +46,6 @@ export default function App() {
     isFocused,
     focusInput,
     resetTyping,
-    debugLogRef,
-    debugTick,
-    inputRef,
   } = useTyping({
     passage,
     isRacing,
@@ -138,27 +126,7 @@ export default function App() {
           <span className="logo-glitch">CYBERSPRINT</span>
           <span className="logo-version">// v1.0</span>
         </div>
-        <div className="topbar-controls" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button
-            onClick={() => setShowDebug((prev) => !prev)}
-            style={{
-              background: showDebug ? 'rgba(0, 243, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid ${showDebug ? '#00f3ff' : '#475569'}`,
-              color: showDebug ? '#00f3ff' : '#94a3b8',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              fontFamily: 'monospace',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-            title="Toggle input diagnostics panel"
-          >
-            <span>🐛</span>
-            <span>{showDebug ? 'DEBUG: ON' : 'DEBUG'}</span>
-          </button>
+        <div className="topbar-controls">
           <MuteToggle />
         </div>
       </header>
@@ -205,16 +173,6 @@ export default function App() {
               isFocused={isFocused}
               onPanelClick={focusInput}
             />
-
-            {/* Diagnostic Debug Panel (toggled via button or ?debug=1) */}
-            {showDebug && (
-              <DebugPanel
-                debugLogRef={debugLogRef}
-                debugTick={debugTick}
-                typingState={typingState}
-                inputRef={inputRef}
-              />
-            )}
           </div>
         )}
 

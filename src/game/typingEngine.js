@@ -144,6 +144,76 @@ export function handleBackspace(state) {
  * @param {boolean} isPasteOrDrop
  * @returns {TypingState}
  */
+/**
+ * Accurately extracts newly inserted text between the previously accepted string
+ * and the browser's new DOM input value.
+ * 
+ * Handles:
+ * - Appending to the end (standard typing: old="W", new="Wa" -> "a")
+ * - Prepended characters when mobile virtual keyboards place caret at index 0 (old="W", new="aW" -> "a")
+ * - Mid-string insertions and multi-character word completions (old="En", new="Eng " -> "g ")
+ * 
+ * @param {string} oldStr - Previously accepted engine text
+ * @param {string} newStr - New DOM input value
+ * @returns {string} The newly entered characters in input order
+ */
+export function extractInsertedText(oldStr, newStr) {
+  if (typeof oldStr !== 'string' || typeof newStr !== 'string') {
+    return '';
+  }
+  if (newStr === oldStr || newStr.length <= oldStr.length) {
+    return '';
+  }
+
+  // 1. Fast path: text was appended to the end (standard typing)
+  if (newStr.startsWith(oldStr)) {
+    return newStr.slice(oldStr.length);
+  }
+
+  // 2. Fast path: text was prepended at index 0 (Android Gboard caret at 0)
+  if (newStr.endsWith(oldStr)) {
+    return newStr.slice(0, newStr.length - oldStr.length);
+  }
+
+  // 3. General two-way prefix/suffix diffing
+  let prefixLen = 0;
+  while (
+    prefixLen < oldStr.length &&
+    prefixLen < newStr.length &&
+    oldStr[prefixLen] === newStr[prefixLen]
+  ) {
+    prefixLen++;
+  }
+
+  let suffixLen = 0;
+  while (
+    suffixLen < (oldStr.length - prefixLen) &&
+    suffixLen < (newStr.length - prefixLen) &&
+    oldStr[oldStr.length - 1 - suffixLen] === newStr[newStr.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+
+  return newStr.slice(prefixLen, newStr.length - suffixLen);
+}
+
+/**
+ * Atomic transition for any input change (from input event, fast typing, or keypress).
+ * 
+ * Rules:
+ * - Paste and drop are blocked when isPasteOrDrop is true.
+ * - Sequential characters in fast typing are applied character by character.
+ * - Deletion via Backspace / cut respects locked credited characters.
+ * - Input is bounded by MAX_WRONG_BUFFER and clamped to engine state.
+ * - Newly inserted characters are reliably extracted even if the mobile keyboard
+ *   inserted them at caret index 0 or reconstructed the DOM value out of order.
+ *
+ * @param {TypingState} state
+ * @param {string} newInputValue
+ * @param {number} nowMs
+ * @param {boolean} isPasteOrDrop
+ * @returns {TypingState}
+ */
 export function applyInput(state, newInputValue, nowMs = 0, isPasteOrDrop = false) {
   if (state.finishedAtMs !== null || isPasteOrDrop) {
     return state;
@@ -163,12 +233,22 @@ export function applyInput(state, newInputValue, nowMs = 0, isPasteOrDrop = fals
     return nextState;
   }
 
-  // Characters appended (single key or fast typing burst)
-  const appended = newInputValue.slice(state.typed.length);
-  let nextState = state;
+  // Replacement event (same length, different character)
+  if (newInputValue.length === state.typed.length) {
+    let nextState = handleBackspace(state);
+    const replacedChar = newInputValue[newInputValue.length - 1];
+    return handleCharacterInput(nextState, replacedChar, nowMs);
+  }
 
-  for (let i = 0; i < appended.length; i++) {
-    nextState = handleCharacterInput(nextState, appended[i], nowMs);
+  // Characters inserted (single key, fast burst, or mobile composition)
+  const inserted = extractInsertedText(state.typed, newInputValue);
+  if (!inserted) {
+    return state;
+  }
+
+  let nextState = state;
+  for (let i = 0; i < inserted.length; i++) {
+    nextState = handleCharacterInput(nextState, inserted[i], nowMs);
     if (nextState.finishedAtMs !== null) {
       break;
     }

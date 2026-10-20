@@ -59,8 +59,8 @@ export const DIFFICULTY_PROFILES = {
  * skillRank: 0 to 4 distributes bot baselines across wpmRange (0 = lowest, 4 = highest).
  */
 export const BOT_ROSTER = [
-  { id: 'bot-nova', name: 'User1', color: '#FF3B5C', skillRank: 0 },
-  { id: 'bot-phantom', name: 'User2', color: '#FFB020', skillRank: 1 },
+  { id: 'bot-nova', name: 'User1', color: '#ffeb3bff', skillRank: 0 },
+  { id: 'bot-phantom', name: 'User2', color: '#ff20a9ff', skillRank: 1 },
   { id: 'bot-apex', name: 'User3', color: '#9BEA3A', skillRank: 2 },
   { id: 'bot-glitch', name: 'User4', color: '#A56BFF', skillRank: 3 },
   { id: 'bot-onyx', name: 'User5', color: '#3D7BFF', skillRank: 4 },
