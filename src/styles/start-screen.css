@@ -1,0 +1,261 @@
+/* CyberSprint Start Screen Styles */
+
+.start-screen-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.start-hero {
+  text-align: center;
+  margin-bottom: var(--space-lg);
+}
+
+.logo-badge {
+  display: inline-block;
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  color: var(--color-cyan);
+  background: rgba(25, 230, 255, 0.1);
+  border: 1px solid rgba(25, 230, 255, 0.3);
+  padding: 4px 12px;
+  margin-bottom: var(--space-xs);
+  clip-path: var(--clip-corner-sm);
+}
+
+.game-logo {
+  font-family: var(--font-logo);
+  font-size: clamp(2.8rem, 6vw, 4.2rem);
+  font-weight: 900;
+  color: var(--color-text);
+  letter-spacing: 0.12em;
+  text-shadow: 
+    0 0 10px rgba(25, 230, 255, 0.6),
+    0 0 30px rgba(25, 230, 255, 0.2);
+  margin: 0;
+  position: relative;
+}
+
+.game-tagline {
+  font-family: var(--font-ui);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  margin-top: var(--space-xs);
+}
+
+/* Mini Track Preview */
+.mini-preview-container {
+  width: 100%;
+  background: var(--color-navy);
+  border: 1px solid var(--color-grid-line);
+  padding: 12px 16px;
+  margin-bottom: var(--space-xl);
+  clip-path: var(--clip-corner-md);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.mini-track {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mini-lane {
+  position: relative;
+  height: 38px;
+  background: rgba(15, 24, 48, 0.8);
+  border-bottom: 1px dashed rgba(34, 52, 90, 0.8);
+  overflow: hidden;
+}
+
+.mini-car-wrapper {
+  position: absolute;
+  top: -3px;
+  width: 80px;
+}
+
+.car-lead {
+  animation: carLoopLead 5s linear infinite;
+}
+
+.car-chase-1 {
+  animation: carLoopChase1 6s linear infinite;
+}
+
+.car-chase-2 {
+  animation: carLoopChase2 7.2s linear infinite;
+}
+
+@keyframes carLoopLead {
+  0% { transform: translateX(-80px); }
+  100% { transform: translateX(900px); }
+}
+
+@keyframes carLoopChase1 {
+  0% { transform: translateX(-140px); }
+  100% { transform: translateX(900px); }
+}
+
+@keyframes carLoopChase2 {
+  0% { transform: translateX(-200px); }
+  100% { transform: translateX(900px); }
+}
+
+/* Main Configuration Card */
+.start-config-card {
+  width: 100%;
+  background: var(--color-panel-trans);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-steel);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-xl);
+  clip-path: var(--clip-corner-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.section-label {
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  letter-spacing: 0.15em;
+  color: var(--color-cyan);
+  border-left: 3px solid var(--color-cyan);
+  padding-left: 10px;
+}
+
+/* Difficulty Selector Group */
+.difficulty-selector-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.difficulty-card {
+  background: var(--color-navy);
+  border: 1px solid var(--color-grid-line);
+  padding: var(--space-md);
+  text-align: left;
+  clip-path: var(--clip-corner-sm);
+  position: relative;
+  transition: all var(--transition-normal);
+  color: var(--color-text);
+}
+
+.difficulty-card:hover {
+  border-color: rgba(25, 230, 255, 0.5);
+  background: rgba(27, 39, 66, 0.6);
+  transform: translateY(-2px);
+}
+
+.difficulty-card.selected {
+  border-color: var(--color-cyan);
+  background: rgba(25, 230, 255, 0.08);
+  box-shadow: var(--glow-cyan);
+}
+
+.difficulty-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-xs);
+}
+
+.difficulty-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  color: var(--color-cyan);
+}
+
+.difficulty-speed {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.difficulty-desc {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  line-height: 1.35;
+}
+
+/* How It Works Briefing */
+.how-it-works {
+  background: rgba(10, 16, 32, 0.7);
+  border: 1px solid var(--color-grid-line);
+  padding: var(--space-md);
+  clip-path: var(--clip-corner-sm);
+}
+
+.how-it-works h3 {
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  color: var(--color-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.how-it-works ul {
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.how-it-works strong {
+  color: var(--color-cyan);
+}
+
+/* Big Start Button */
+.start-race-button {
+  background: linear-gradient(135deg, var(--color-cyan) 0%, var(--color-blue) 100%);
+  color: var(--color-void);
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 1.3rem;
+  letter-spacing: 0.15em;
+  padding: 16px 32px;
+  clip-path: var(--clip-corner-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: var(--glow-cyan);
+  transition: all var(--transition-fast);
+  margin-top: var(--space-xs);
+}
+
+.start-race-button:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--glow-cyan-strong);
+  filter: brightness(1.1);
+}
+
+.start-race-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 768px) {
+  .difficulty-selector-group {
+    grid-template-columns: 1fr;
+  }
+}

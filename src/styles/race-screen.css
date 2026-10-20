@@ -1,0 +1,546 @@
+/* CyberSprint Race Screen Styles */
+
+.race-screen-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: var(--space-md);
+  gap: var(--space-md);
+  flex: 1;
+}
+
+/* TOP TRACK (approx 50% height target) */
+.race-track-container {
+  background: var(--color-navy);
+  border: 1px solid var(--color-steel);
+  box-shadow: var(--shadow-panel);
+  clip-path: var(--clip-corner-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.track-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(5, 7, 13, 0.9);
+  border-bottom: 1px solid var(--color-grid-line);
+}
+
+.track-title {
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: var(--color-muted);
+}
+
+.track-decor-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-grid-line), transparent);
+  margin: 0 16px;
+}
+
+.track-lanes-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: #070B14;
+}
+
+/* Individual Lane */
+.race-lane {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  border-bottom: 1px solid rgba(34, 52, 90, 0.4);
+  background: rgba(10, 16, 32, 0.5);
+}
+
+.race-lane:last-child {
+  border-bottom: none;
+}
+
+.race-lane.player-lane {
+  background: rgba(25, 230, 255, 0.04);
+  border-left: 3px solid var(--color-cyan);
+}
+
+/* Lane Info Sidebar */
+.lane-info-bar {
+  width: 110px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-right: 1px solid var(--color-grid-line);
+  background: rgba(5, 7, 13, 0.7);
+  height: 100%;
+  z-index: 5;
+}
+
+.lane-index {
+  font-family: var(--font-code);
+  font-size: 0.7rem;
+  color: var(--color-muted);
+}
+
+.lane-racer-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.player-badge {
+  font-family: var(--font-code);
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--color-cyan);
+  color: var(--color-void);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.lane-rank-badge {
+  margin-left: auto;
+  font-family: var(--font-code);
+  font-size: 0.7rem;
+  color: var(--color-muted);
+}
+
+.lane-rank-badge.rank-1 {
+  color: var(--color-amber);
+  font-weight: 700;
+}
+
+/* Track Surface */
+.lane-track-surface {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(34, 52, 90, 0.25) 40px,
+      rgba(34, 52, 90, 0.25) 80px
+    );
+}
+
+/* Scrolling lane markers */
+.lane-track-surface.is-active-scrolling {
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(25, 230, 255, 0.15) 40px,
+      rgba(25, 230, 255, 0.15) 80px
+    );
+  animation: trackScroll 1.2s linear infinite;
+}
+
+@keyframes trackScroll {
+  from { background-position: 0 0; }
+  to { background-position: -80px 0; }
+}
+
+/* Start Grid Line */
+.start-grid-line {
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+/* Finish Checkered Neon Line */
+.finish-checkered-line {
+  position: absolute;
+  right: 18px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: repeating-linear-gradient(
+    180deg,
+    #FFFFFF 0px,
+    #FFFFFF 6px,
+    #05070D 6px,
+    #05070D 12px
+  );
+  box-shadow: 0 0 12px rgba(25, 230, 255, 0.7);
+  z-index: 2;
+}
+
+/* Car Slider Container */
+.car-slider-slot {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 24px;
+  right: 80px; /* leaves room for car width before finish line */
+  pointer-events: none;
+  /* Visual transform directly driven by CSS variable */
+  transform: translateX(var(--car-progress-pct, 0%));
+  will-change: transform;
+}
+
+/* Racing Car Component Styling */
+.racing-car-wrapper {
+  position: relative;
+  width: 72px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.racing-car-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.car-player-tag {
+  position: absolute;
+  top: -6px;
+  left: 20px;
+  background: var(--color-cyan);
+  color: var(--color-void);
+  font-family: var(--font-code);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 2px;
+  box-shadow: var(--glow-cyan);
+}
+
+.car-finish-badge {
+  position: absolute;
+  right: -8px;
+  top: 4px;
+  background: var(--color-amber);
+  color: var(--color-void);
+  font-family: var(--font-heading);
+  font-size: 0.65rem;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(255, 176, 32, 0.6);
+}
+
+/* MIDDLE HUD */
+.race-hud-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-panel-trans);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-steel);
+  padding: 10px 16px;
+  clip-path: var(--clip-corner-sm);
+  box-shadow: var(--shadow-panel);
+}
+
+.hud-progress-bar-track {
+  width: 100%;
+  height: 4px;
+  background: var(--color-navy);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.hud-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-blue), var(--color-cyan));
+  box-shadow: var(--glow-cyan);
+  transition: width 0.1s linear;
+}
+
+.hud-chips-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hud-chip {
+  display: flex;
+  flex-direction: column;
+}
+
+.chip-label {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+}
+
+.chip-value {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.chip-unit {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.highlight-rank {
+  color: var(--color-cyan);
+}
+
+.font-mono {
+  font-family: var(--font-code);
+}
+
+.hud-skip-btn {
+  margin-left: auto;
+  background: rgba(255, 176, 32, 0.2);
+  border: 1px solid var(--color-amber);
+  color: var(--color-amber);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  padding: 6px 14px;
+  clip-path: var(--clip-corner-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.hud-skip-btn:hover {
+  background: var(--color-amber);
+  color: var(--color-void);
+  box-shadow: 0 0 15px rgba(255, 176, 32, 0.5);
+}
+
+/* BOTTOM TYPING PANEL */
+.typing-panel-container {
+  position: relative;
+  background: var(--color-panel);
+  border: 1px solid var(--color-steel);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 16px 20px 24px;
+  cursor: text;
+  transition: border-color var(--transition-fast);
+}
+
+.typing-panel-container:hover,
+.typing-panel-container:focus-within {
+  border-color: rgba(25, 230, 255, 0.5);
+}
+
+.typing-panel-container.focus-lost {
+  border-color: rgba(255, 176, 32, 0.6);
+}
+
+.focus-hint-badge {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  background: rgba(255, 176, 32, 0.15);
+  border: 1px solid var(--color-amber);
+  color: var(--color-amber);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: pulseWarning 1.5s infinite;
+}
+
+@keyframes pulseWarning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-amber);
+}
+
+.visually-hidden-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--color-grid-line);
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.terminal-dot.red { background: var(--color-crimson); }
+.terminal-dot.yellow { background: var(--color-amber); }
+.terminal-dot.green { background: var(--color-correct); }
+
+.terminal-title {
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+  margin-left: 6px;
+}
+
+.terminal-status {
+  margin-left: auto;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+
+/* Passage Display Spans */
+.passage-display {
+  font-family: var(--font-code);
+  font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+  line-height: 1.85;
+  letter-spacing: 0.04em;
+  user-select: none;
+  word-break: break-word;
+}
+
+.passage-char {
+  position: relative;
+  border-bottom: 2px solid transparent;
+  transition: color 0.08s ease;
+}
+
+/* 1. Correct (Green, Locked) */
+.passage-char.char-correct {
+  color: var(--color-correct);
+  text-shadow: 0 0 8px rgba(77, 255, 176, 0.3);
+}
+
+/* 2. Current (Caret Highlight) */
+.passage-char.char-current {
+  color: var(--color-text);
+  background: rgba(25, 230, 255, 0.2);
+  border-bottom: 2px solid var(--color-cyan);
+  box-shadow: 0 0 10px rgba(25, 230, 255, 0.5);
+  animation: caretBlink 1s infinite;
+}
+
+@keyframes caretBlink {
+  0%, 100% { border-bottom-color: var(--color-cyan); }
+  50% { border-bottom-color: transparent; }
+}
+
+/* 3. Wrong (Red PLUS Underline, not color alone) */
+.passage-char.char-wrong {
+  color: var(--color-error);
+  background: rgba(255, 77, 109, 0.2);
+  border-bottom: 2px wavy var(--color-error);
+  text-decoration: underline wavy var(--color-error);
+}
+
+/* 4. Upcoming (Dim) */
+.passage-char.char-upcoming {
+  color: rgba(140, 163, 199, 0.45);
+}
+
+/* Space formatting */
+.passage-char.is-space.char-wrong {
+  background: rgba(255, 77, 109, 0.4);
+}
+
+/* COUNTDOWN OVERLAY */
+.countdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 13, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.countdown-digit-wrapper {
+  text-align: center;
+  animation: punchIn 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes punchIn {
+  from { transform: scale(2.2); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.countdown-number {
+  font-family: var(--font-logo);
+  font-size: clamp(5rem, 15vw, 10rem);
+  font-weight: 900;
+  color: var(--color-cyan);
+  text-shadow: 
+    0 0 20px var(--color-cyan),
+    0 0 50px rgba(25, 230, 255, 0.6);
+  line-height: 1;
+}
+
+.countdown-number.is-go {
+  color: var(--color-correct);
+  text-shadow: 
+    0 0 25px var(--color-correct),
+    0 0 60px rgba(77, 255, 176, 0.8);
+}
+
+.countdown-subtext {
+  font-family: var(--font-ui);
+  font-size: 1.2rem;
+  letter-spacing: 0.3em;
+  color: var(--color-muted);
+  margin-top: 10px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .race-lane {
+    height: 44px;
+  }
+  .lane-info-bar {
+    width: 85px;
+    padding: 0 6px;
+  }
+  .lane-racer-name {
+    font-size: 0.75rem;
+  }
+  .racing-car-wrapper {
+    width: 56px;
+    height: 36px;
+  }
+  .passage-display {
+    font-size: 1.1rem;
+  }
+}
