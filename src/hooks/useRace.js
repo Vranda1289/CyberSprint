@@ -25,8 +25,9 @@ export function useRace() {
   const [passage, setPassage] = useState(() => getRandomPassage());
   const [seed, setSeed] = useState(() => parseSeedFromUrl() ?? Math.floor(Math.random() * 1000000));
 
-  // Mutable refs for high-frequency rAF loop
+  // Mutable refs for high-frequency rAF loop & state synchronization
   const rafIdRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
   const raceStartRef = useRef(0);
   const racersRef = useRef([]);
   const winnerRef = useRef(null);
@@ -34,6 +35,19 @@ export function useRace() {
   const lastHudUpdateRef = useRef(0);
   const playerSmoothedProgressRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
+  const passageRef = useRef(passage);
+  const difficultyRef = useRef(difficulty);
+  const hasConcludedRef = useRef(false);
+  const playerFinishedRef = useRef(false);
+
+  // Synchronize passageRef and difficultyRef with state
+  useEffect(() => {
+    passageRef.current = passage;
+  }, [passage]);
+
+  useEffect(() => {
+    difficultyRef.current = difficulty;
+  }, [difficulty]);
 
   // Direct DOM references to car track nodes for 60fps CSS transform updates
   const carNodesRef = useRef([]);
@@ -61,28 +75,59 @@ export function useRace() {
     playerStatsRef.current = { keystrokes, correctKeystrokes };
   }, []);
 
-  // Stops and clears the rAF loop
+  // Stops and clears the rAF loop and countdown timers
   const stopLoop = useCallback(() => {
     if (rafIdRef.current != null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
+    if (countdownIntervalRef.current != null) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
   }, []);
 
-  // Conclude race helper
+  // Conclude race helper - guarantees execution exactly once
   const concludeRace = useCallback((reason) => {
+    if (hasConcludedRef.current) return;
+    hasConcludedRef.current = true;
     stopLoop();
-    setPhase('results');
 
-    // Finalize stats
+    const currentPassage = passageRef.current;
+    const passageLength = currentPassage.length;
     const finalElapsed = Math.max(0, performance.now() - raceStartRef.current);
-    const finalRacers = computeRankings(racersRef.current, passage.length);
+
+    // Finalize stats and rankings
+    const isPlayerFin = playerFinishedRef.current || playerCreditedRef.current >= passageLength;
+    const updatedRacers = racersRef.current.map((racer) => {
+      if (racer.isPlayer) {
+        const finTime = racer.finishedAtMs ?? (isPlayerFin ? finalElapsed : null);
+        const wpm = calculateWpm(racer.progress, finalElapsed, isPlayerFin, finTime);
+        const pct = clamp(racer.progress / passageLength, 0, 1) * 100;
+        return {
+          ...racer,
+          finishedAtMs: finTime,
+          wpm,
+          progressPct: pct,
+        };
+      }
+      return {
+        ...racer,
+        progressPct: clamp(racer.progress / passageLength, 0, 1) * 100,
+      };
+    });
+
+    const finalRacers = computeRankings(updatedRacers, passageLength);
     const finalWinner = determineWinner(finalRacers);
     const playerRacer = finalRacers.find((r) => r.isPlayer);
+    const recordedElapsed = playerRacer?.finishedAtMs != null ? playerRacer.finishedAtMs : finalElapsed;
+
+    racersRef.current = finalRacers;
+    winnerRef.current = finalWinner;
 
     setHudSnapshot((prev) => ({
       ...prev,
-      elapsedMs: finalElapsed,
+      elapsedMs: recordedElapsed,
       racers: finalRacers,
       winner: finalWinner,
       playerRank: playerRacer ? playerRacer.rank : 6,
@@ -92,21 +137,48 @@ export function useRace() {
       playerFinished: playerRacer ? playerRacer.finishedAtMs != null : false,
       conclusionReason: reason,
     }));
-  }, [stopLoop, passage.length]);
+
+    setPhase('results');
+  }, [stopLoop]);
+
+  // Handle direct player completion event from typing engine
+  const handlePlayerFinish = useCallback((finishTimeMs) => {
+    if (hasConcludedRef.current) return;
+    playerFinishedRef.current = true;
+    const now = performance.now();
+    const elapsedMs = raceStartRef.current > 0 ? Math.max(0, now - raceStartRef.current) : (finishTimeMs ?? 0);
+
+    // Update player finish timestamp immediately
+    racersRef.current = racersRef.current.map((racer) => {
+      if (racer.isPlayer && racer.finishedAtMs == null) {
+        return {
+          ...racer,
+          progress: passageRef.current.length,
+          finishedAtMs: elapsedMs,
+        };
+      }
+      return racer;
+    });
+
+    concludeRace('PLAYER_FINISHED');
+  }, [concludeRace]);
 
   // Main high-frequency rAF loop
   const runRaceFrame = useCallback(() => {
+    if (hasConcludedRef.current) return;
+
     const now = performance.now();
     const elapsedMs = Math.max(0, now - raceStartRef.current);
-    const passageLength = passage.length;
+    const currentPassage = passageRef.current;
+    const passageLength = currentPassage.length;
     const deltaMs = lastFrameTimeRef.current > 0 ? (now - lastFrameTimeRef.current) : 16.6;
     lastFrameTimeRef.current = now;
 
-    // 1. Update bot progress from their pure schedules
+    // 1. Update bot progress from pure schedules and player typing
     const updatedRacers = racersRef.current.map((racer) => {
       if (racer.isPlayer) {
         const credited = playerCreditedRef.current;
-        const isFin = racer.finishedAtMs != null || credited >= passageLength;
+        const isFin = racer.finishedAtMs != null || playerFinishedRef.current || credited >= passageLength;
         const finTime = racer.finishedAtMs ?? (isFin ? elapsedMs : null);
         const wpm = calculateWpm(credited, elapsedMs, isFin, finTime);
         const acc = calculateAccuracy(
@@ -120,6 +192,7 @@ export function useRace() {
           wpm,
           accuracy: acc,
           finishedAtMs: finTime,
+          progressPct: clamp(credited / passageLength, 0, 1) * 100,
         };
       } else {
         // Pure bot progress at elapsedMs
@@ -133,6 +206,7 @@ export function useRace() {
           progress: botProg,
           wpm,
           finishedAtMs: finTime,
+          progressPct: clamp(botProg / passageLength, 0, 1) * 100,
         };
       }
     });
@@ -171,8 +245,9 @@ export function useRace() {
 
     // 6. Check conclusion rules
     const playerRacer = rankedRacers.find((r) => r.isPlayer);
+    const isPlayerFin = playerRacer?.finishedAtMs != null || playerFinishedRef.current || playerCreditedRef.current >= passageLength;
     const conclusion = checkRaceConclusion({
-      playerFinished: playerRacer?.finishedAtMs != null,
+      playerFinished: isPlayerFin,
       firstFinishTimeMs: firstFinishTimeRef.current,
       elapsedMs,
     });
@@ -194,36 +269,44 @@ export function useRace() {
         playerWpm: playerRacer ? playerRacer.wpm : 0,
         playerAccuracy: playerRacer ? playerRacer.accuracy : 100,
         playerProgress: playerRacer ? playerRacer.progress : 0,
-        playerFinished: playerRacer?.finishedAtMs != null,
+        playerFinished: isPlayerFin,
         conclusionReason: null,
       });
     }
 
     // Continue frame loop
     rafIdRef.current = requestAnimationFrame(runRaceFrame);
-  }, [passage.length, concludeRace]);
+  }, [concludeRace]);
 
   // Starts the countdown sequence
   const startRace = useCallback(() => {
-    if (!difficulty) {
+    const currentDiff = difficultyRef.current;
+    if (!currentDiff) {
       return;
     }
     stopLoop();
+    hasConcludedRef.current = false;
+    playerFinishedRef.current = false;
+
     // Choose fresh seed if not locked via URL
     const activeSeed = parseSeedFromUrl() ?? Math.floor(Math.random() * 1000000);
     setSeed(activeSeed);
 
     if (typeof console !== 'undefined' && console.log) {
-      console.log(`[CyberSprint] Starting race with seed: ${activeSeed}, difficulty: ${difficulty}`);
+      console.log(`[CyberSprint] Starting race with seed: ${activeSeed}, difficulty: ${currentDiff}`);
     }
 
     // Pick new passage
-    const nextPassage = getRandomPassage(passage);
+    const nextPassage = getRandomPassage(passageRef.current);
+    passageRef.current = nextPassage;
     setPassage(nextPassage);
 
-    // Initialize bot schedules
-    const botEntries = generateBotSchedules(nextPassage, difficulty, activeSeed);
-    const freshRacers = createRacerLaneList(botEntries, PLAYER_INFO);
+    // Initialize bot schedules with the active passage and difficulty
+    const botEntries = generateBotSchedules(nextPassage, currentDiff, activeSeed);
+    const freshRacers = createRacerLaneList(botEntries, PLAYER_INFO).map((r) => ({
+      ...r,
+      progressPct: 0,
+    }));
     racersRef.current = freshRacers;
     winnerRef.current = null;
     firstFinishTimeRef.current = null;
@@ -240,29 +323,44 @@ export function useRace() {
       }
     }
 
+    // Initialize HUD immediately so lanes, names, and cars render on starting grid during countdown
+    setHudSnapshot({
+      elapsedMs: 0,
+      racers: freshRacers,
+      winner: null,
+      playerRank: PLAYER_INFO.laneIndex + 1,
+      playerWpm: 0,
+      playerAccuracy: 100,
+      playerProgress: 0,
+      playerFinished: false,
+      conclusionReason: null,
+    });
+
     // Set countdown phase
     setPhase('countdown');
     setCountdownValue(3);
 
     let step = 3;
-    const interval = setInterval(() => {
+    countdownIntervalRef.current = setInterval(() => {
       step -= 1;
       if (step > 0) {
         setCountdownValue(step);
       } else if (step === 0) {
         setCountdownValue('GO!');
       } else {
-        clearInterval(interval);
+        if (countdownIntervalRef.current != null) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
         // Start live race
         raceStartRef.current = performance.now();
         lastHudUpdateRef.current = performance.now();
+        lastFrameTimeRef.current = performance.now();
         setPhase('racing');
         rafIdRef.current = requestAnimationFrame(runRaceFrame);
       }
     }, COUNTDOWN_STEP_MS);
-
-    return () => clearInterval(interval);
-  }, [difficulty, passage, stopLoop, runRaceFrame]);
+  }, [stopLoop, runRaceFrame]);
 
   // Skip ahead to results if winner exists
   const skipToResults = useCallback(() => {
@@ -280,6 +378,9 @@ export function useRace() {
   const goToStart = useCallback(() => {
     stopLoop();
     setDifficulty(null);
+    difficultyRef.current = null;
+    hasConcludedRef.current = false;
+    playerFinishedRef.current = false;
     setPhase('start');
   }, [stopLoop]);
 
@@ -298,6 +399,7 @@ export function useRace() {
     hudSnapshot,
     carNodesRef,
     updatePlayerTyping,
+    handlePlayerFinish,
     startRace,
     skipToResults,
     playAgain,

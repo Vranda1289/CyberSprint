@@ -103,9 +103,13 @@ export function getBotProgressAtTime(schedule, t, passageLength) {
     return 0;
   }
 
-  const finishTime = schedule[passageLength - 1];
+  const len = schedule.length;
+  const targetLen = passageLength != null ? Math.min(passageLength, len) : len;
+  if (targetLen <= 0) return 0;
+
+  const finishTime = schedule[targetLen - 1];
   if (t >= finishTime) {
-    return passageLength;
+    return targetLen;
   }
 
   // Before first character completion
@@ -115,12 +119,12 @@ export function getBotProgressAtTime(schedule, t, passageLength) {
 
   // Binary search for interval schedule[i] <= t < schedule[i+1]
   let low = 0;
-  let high = passageLength - 1;
+  let high = targetLen - 1;
 
   while (low <= high) {
     const mid = (low + high) >> 1;
     if (schedule[mid] <= t) {
-      if (mid === passageLength - 1 || schedule[mid + 1] > t) {
+      if (mid === targetLen - 1 || schedule[mid + 1] > t) {
         // schedule[mid] <= t < schedule[mid + 1]
         const intervalStart = schedule[mid];
         const intervalEnd = schedule[mid + 1];

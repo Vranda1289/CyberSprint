@@ -71,9 +71,12 @@ export function ResultsScreen({
         <div className="leaderboard-list">
           {racers.map((racer) => {
             const isFin = racer.finishedAtMs != null;
+            const dnfPct = racer.progressPct != null
+              ? Math.round(racer.progressPct)
+              : Math.round(racer.progress);
             const finishDisplay = isFin
               ? formatTime(racer.finishedAtMs)
-              : `DNF (${Math.round((racer.progress / 100) * 100)}%)`;
+              : `DNF (${dnfPct}%)`;
 
             return (
               <div

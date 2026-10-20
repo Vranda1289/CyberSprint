@@ -31,6 +31,7 @@ export default function App() {
     hudSnapshot,
     carNodesRef,
     updatePlayerTyping,
+    handlePlayerFinish,
     startRace,
     skipToResults,
     playAgain,
@@ -49,7 +50,7 @@ export default function App() {
     passage,
     isRacing,
     onPlayerFinish: (finishTime) => {
-      // finish callback
+      handlePlayerFinish(finishTime);
     },
   });
 

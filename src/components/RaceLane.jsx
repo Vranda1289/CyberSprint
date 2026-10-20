@@ -9,6 +9,7 @@ export function RaceLane({
 }) {
   const isPlayer = racer?.isPlayer;
   const isFinished = racer?.finishedAtMs != null;
+  const progressPct = racer?.progressPct != null ? racer.progressPct : 0;
 
   return (
     <div className={`race-lane ${isPlayer ? 'player-lane' : ''}`}>
@@ -34,7 +35,7 @@ export function RaceLane({
         <div
           ref={carRef}
           className="car-slider-slot"
-          style={{ '--car-progress-pct': '0%' }}
+          style={{ '--car-progress-pct': `${progressPct}%` }}
         >
           <RacingCar
             color={racer?.color}

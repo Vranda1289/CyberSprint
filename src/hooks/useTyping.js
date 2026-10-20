@@ -182,6 +182,7 @@ export function useTyping({ passage, isRacing, onPlayerFinish, onFirstKey }) {
       onCut: handleCut,
       onFocus: () => setIsFocused(true),
       onBlur: () => setIsFocused(false),
+      disabled: !isRacing || typingState.finishedAtMs !== null,
       autoComplete: 'off',
       autoCorrect: 'off',
       autoCapitalize: 'off',

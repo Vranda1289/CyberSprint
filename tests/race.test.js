@@ -137,4 +137,53 @@ describe('Race Engine', () => {
       expect(racer.wpm).toBe(0);
     });
   });
+
+  it('roster contains the 5 requested bot names and YOU for player', () => {
+    const botEntries = generateBotSchedules('Test passage here.', 'medium', 1234);
+    const lanes = createRacerLaneList(botEntries, PLAYER_INFO);
+
+    const botNames = lanes.filter((r) => !r.isPlayer).map((b) => b.name);
+    expect(botNames).toEqual(['NOVA', 'PHANTOM', 'APEX', 'GLITCH', 'ONYX']);
+
+    const playerRacer = lanes.find((r) => r.isPlayer);
+    expect(playerRacer.name).toBe('YOU');
+
+    // Each bot has distinct color
+    const botColors = lanes.filter((r) => !r.isPlayer).map((b) => b.color);
+    expect(new Set(botColors).size).toBe(5);
+  });
+
+  it('race concludes immediately when player completes the passage regardless of unfinished bots', () => {
+    // Player finishes at 18000ms while all 5 bots are unfinished
+    const conclusion = checkRaceConclusion({
+      playerFinished: true,
+      firstFinishTimeMs: 18000,
+      elapsedMs: 18000,
+    });
+
+    expect(conclusion.shouldConclude).toBe(true);
+    expect(conclusion.reason).toBe('PLAYER_FINISHED');
+  });
+
+  it('winner is player when player finishes first, and bot when bot finishes first', () => {
+    // Scenario A: Player finishes at 16000ms, fastest bot finishes at 20000ms
+    const racersA = [
+      { id: 'bot-1', isPlayer: false, laneIndex: 0, finishedAtMs: 20000, progress: 100 },
+      { id: 'player', isPlayer: true, laneIndex: 2, finishedAtMs: 16000, progress: 100 },
+      { id: 'bot-2', isPlayer: false, laneIndex: 1, finishedAtMs: null, progress: 75 },
+    ];
+    const winnerA = determineWinner(racersA);
+    expect(winnerA.id).toBe('player');
+    expect(winnerA.isPlayer).toBe(true);
+
+    // Scenario B: Bot finishes at 14000ms, player finishes at 17000ms
+    const racersB = [
+      { id: 'bot-1', isPlayer: false, laneIndex: 0, finishedAtMs: 14000, progress: 100 },
+      { id: 'player', isPlayer: true, laneIndex: 2, finishedAtMs: 17000, progress: 100 },
+      { id: 'bot-2', isPlayer: false, laneIndex: 1, finishedAtMs: null, progress: 80 },
+    ];
+    const winnerB = determineWinner(racersB);
+    expect(winnerB.id).toBe('bot-1');
+    expect(winnerB.isPlayer).toBe(false);
+  });
 });
