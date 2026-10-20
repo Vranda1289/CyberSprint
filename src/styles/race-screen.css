@@ -385,9 +385,14 @@
 .visually-hidden-input {
   position: absolute;
   opacity: 0;
-  pointer-events: none;
   width: 1px;
   height: 1px;
+  /* font-size >= 16px prevents iOS Safari from zooming on input focus */
+  font-size: 16px;
+  /* Allow touch events to reach the input on mobile */
+  touch-action: manipulation;
+  /* Prevent the caret from being visible in some mobile browsers */
+  caret-color: transparent;
 }
 
 .terminal-header {
