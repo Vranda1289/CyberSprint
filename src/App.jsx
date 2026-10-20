@@ -26,6 +26,9 @@ export default function App() {
     phase,
     difficulty,
     setDifficulty,
+    category,
+    setCategory,
+    activePassage,
     countdownValue,
     passage,
     hudSnapshot,
@@ -137,6 +140,8 @@ export default function App() {
           <StartScreen
             difficulty={difficulty}
             onSelectDifficulty={setDifficulty}
+            category={category}
+            onSelectCategory={setCategory}
             onStartRace={handleStartRace}
           />
         )}
@@ -171,6 +176,7 @@ export default function App() {
               typingState={typingState}
               inputProps={inputProps}
               isFocused={isFocused}
+              activePassage={activePassage}
               onPanelClick={focusInput}
             />
           </div>
@@ -185,6 +191,7 @@ export default function App() {
             playerAccuracy={hudSnapshot.playerAccuracy}
             elapsedMs={hudSnapshot.elapsedMs}
             difficulty={difficulty}
+            activePassage={activePassage}
             onPlayAgain={handlePlayAgain}
             onChangeDifficulty={handleChangeDifficulty}
           />

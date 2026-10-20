@@ -10,6 +10,7 @@ export function ResultsScreen({
   playerAccuracy = 100,
   elapsedMs = 0,
   difficulty = '',
+  activePassage = null,
   onPlayAgain,
   onChangeDifficulty,
 }) {
@@ -62,6 +63,23 @@ export function ResultsScreen({
           </span>
         </div>
       </div>
+
+      {/* Riddle Solution Card (Only revealed after race conclusion) */}
+      {activePassage?.answer && (
+        <div className="riddle-solution-card">
+          <div className="riddle-badge">
+            <span className="pulse-dot" /> 🧩 RIDDLE SOLUTION DECRYPTED
+          </div>
+          <div className="riddle-title">{activePassage.title}</div>
+          <div className="riddle-answer-row">
+            <span className="riddle-answer-label">ANSWER:</span>
+            <span className="riddle-answer-text">{activePassage.answer}</span>
+          </div>
+          {activePassage.explanation && (
+            <p className="riddle-explanation">{activePassage.explanation}</p>
+          )}
+        </div>
+      )}
 
       {/* Full 6-Racer Leaderboard */}
       <div className="leaderboard-table-card">

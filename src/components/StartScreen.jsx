@@ -1,8 +1,15 @@
 import React from 'react';
 import { DifficultySelector } from './DifficultySelector.jsx';
+import { CategorySelector } from './CategorySelector.jsx';
 import { RacingCar } from './RacingCar.jsx';
 
-export function StartScreen({ difficulty, onSelectDifficulty, onStartRace }) {
+export function StartScreen({
+  difficulty,
+  onSelectDifficulty,
+  category = 'all',
+  onSelectCategory,
+  onStartRace,
+}) {
   return (
     <div className="start-screen-container">
       {/* Animated Hero Branding */}
@@ -41,6 +48,12 @@ export function StartScreen({ difficulty, onSelectDifficulty, onStartRace }) {
         <DifficultySelector
           selected={difficulty}
           onSelect={onSelectDifficulty}
+        />
+
+        <div className="section-label" style={{ marginTop: '1.25rem' }}>SELECT CONTENT CATEGORY</div>
+        <CategorySelector
+          selected={category}
+          onSelect={onSelectCategory}
         />
 
         <div className="how-it-works">

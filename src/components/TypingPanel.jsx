@@ -5,6 +5,7 @@ export function TypingPanel({
   typingState,
   inputProps,
   isFocused,
+  activePassage = null,
   onPanelClick,
 }) {
   const { credited, wrongCount, isError } = typingState;
@@ -36,7 +37,9 @@ export function TypingPanel({
         <span className="terminal-dot red" />
         <span className="terminal-dot yellow" />
         <span className="terminal-dot green" />
-        <span className="terminal-title">NEURAL LINK // INPUT STREAM</span>
+        <span className="terminal-title">
+          {activePassage?.title ? `${activePassage.title.toUpperCase()} // INPUT STREAM` : 'NEURAL LINK // INPUT STREAM'}
+        </span>
         <span className="terminal-status">
           {isError ? (
             <span className="text-error font-mono">ERROR DETECTED // BACKSPACE TO CLEAR</span>

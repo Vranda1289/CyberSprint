@@ -6,7 +6,7 @@ import {
   SMOOTHING_TAU_MS,
   PLAYER_INFO,
 } from '../game/config.js';
-import { getRandomPassage } from '../game/passages.js';
+import { getRandomPassageObject } from '../game/passages.js';
 import { generateBotSchedules, getBotProgressAtTime } from '../game/botEngine.js';
 import {
   detectFinishers,
@@ -21,8 +21,10 @@ import { calculateWpm, calculateAccuracy } from '../game/typingEngine.js';
 export function useRace() {
   const [phase, setPhase] = useState('start'); // 'start' | 'countdown' | 'racing' | 'results'
   const [difficulty, setDifficulty] = useState(null);
+  const [category, setCategory] = useState('all');
   const [countdownValue, setCountdownValue] = useState(3); // 3, 2, 1, 'GO!'
-  const [passage, setPassage] = useState(() => getRandomPassage());
+  const [activePassage, setActivePassage] = useState(() => getRandomPassageObject(null, 'all'));
+  const passage = activePassage.text;
   const [seed, setSeed] = useState(() => parseSeedFromUrl() ?? Math.floor(Math.random() * 1000000));
 
   // Mutable refs for high-frequency rAF loop & state synchronization
@@ -36,18 +38,25 @@ export function useRace() {
   const playerSmoothedProgressRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const passageRef = useRef(passage);
+  const passageObjRef = useRef(activePassage);
   const difficultyRef = useRef(difficulty);
+  const categoryRef = useRef(category);
   const hasConcludedRef = useRef(false);
   const playerFinishedRef = useRef(false);
 
-  // Synchronize passageRef and difficultyRef with state
+  // Synchronize refs with state
   useEffect(() => {
     passageRef.current = passage;
-  }, [passage]);
+    passageObjRef.current = activePassage;
+  }, [passage, activePassage]);
 
   useEffect(() => {
     difficultyRef.current = difficulty;
   }, [difficulty]);
+
+  useEffect(() => {
+    categoryRef.current = category;
+  }, [category]);
 
   // Direct DOM references to car track nodes for 60fps CSS transform updates
   const carNodesRef = useRef([]);
@@ -296,10 +305,12 @@ export function useRace() {
       console.log(`[CyberSprint] Starting race with seed: ${activeSeed}, difficulty: ${currentDiff}`);
     }
 
-    // Pick new passage
-    const nextPassage = getRandomPassage(passageRef.current);
-    passageRef.current = nextPassage;
-    setPassage(nextPassage);
+    // Pick new passage respecting category and avoiding immediate repeat
+    const nextPassageObj = getRandomPassageObject(passageObjRef.current?.id, categoryRef.current);
+    passageObjRef.current = nextPassageObj;
+    setActivePassage(nextPassageObj);
+    passageRef.current = nextPassageObj.text;
+    const nextPassage = nextPassageObj.text;
 
     // Initialize bot schedules with the active passage and difficulty
     const botEntries = generateBotSchedules(nextPassage, currentDiff, activeSeed);
@@ -393,6 +404,9 @@ export function useRace() {
     phase,
     difficulty,
     setDifficulty,
+    category,
+    setCategory,
+    activePassage,
     countdownValue,
     passage,
     seed,
