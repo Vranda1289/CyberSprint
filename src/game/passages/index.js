@@ -198,6 +198,20 @@ export function getRandomPassageObject(previousId = null, category = 'all', rng 
     (p) => p.id !== previousId && p.text !== previousId
   );
   const eligible = pool.length > 0 ? pool : categoryPool;
+
+  // When choosing from mixed content pool ('all') and there is a previous passage,
+  // naturally switch categories across consecutive races so they feel different and unpredictable
+  if ((!category || category === 'all') && previousId) {
+    const previousObj = PASSAGE_BANK.find((p) => p.id === previousId || p.text === previousId);
+    if (previousObj) {
+      const differentCatPool = eligible.filter((p) => p.category !== previousObj.category);
+      if (differentCatPool.length > 0) {
+        const index = Math.floor(rng() * differentCatPool.length);
+        return differentCatPool[index];
+      }
+    }
+  }
+
   const index = Math.floor(rng() * eligible.length);
   return eligible[index] || eligible[0];
 }

@@ -26,8 +26,6 @@ export default function App() {
     phase,
     difficulty,
     setDifficulty,
-    category,
-    setCategory,
     activePassage,
     countdownValue,
     passage,
@@ -140,8 +138,6 @@ export default function App() {
           <StartScreen
             difficulty={difficulty}
             onSelectDifficulty={setDifficulty}
-            category={category}
-            onSelectCategory={setCategory}
             onStartRace={handleStartRace}
           />
         )}

@@ -1,13 +1,10 @@
 import React from 'react';
 import { DifficultySelector } from './DifficultySelector.jsx';
-import { CategorySelector } from './CategorySelector.jsx';
 import { RacingCar } from './RacingCar.jsx';
 
 export function StartScreen({
   difficulty,
   onSelectDifficulty,
-  category = 'all',
-  onSelectCategory,
   onStartRace,
 }) {
   return (
@@ -44,17 +41,13 @@ export function StartScreen({
 
       {/* Main Configuration Card */}
       <div className="start-config-card">
-        <div className="section-label">SELECT DIFFICULTY TIER</div>
-        <DifficultySelector
-          selected={difficulty}
-          onSelect={onSelectDifficulty}
-        />
-
-        <div className="section-label" style={{ marginTop: '1.25rem' }}>SELECT CONTENT CATEGORY</div>
-        <CategorySelector
-          selected={category}
-          onSelect={onSelectCategory}
-        />
+        <div className="difficulty-selection-section">
+          <div className="section-label">SELECT DIFFICULTY TIER</div>
+          <DifficultySelector
+            selected={difficulty}
+            onSelect={onSelectDifficulty}
+          />
+        </div>
 
         <div className="how-it-works">
           <h3>PROTOCOL BRIEFING:</h3>

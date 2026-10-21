@@ -21,7 +21,6 @@ import { calculateWpm, calculateAccuracy } from '../game/typingEngine.js';
 export function useRace() {
   const [phase, setPhase] = useState('start'); // 'start' | 'countdown' | 'racing' | 'results'
   const [difficulty, setDifficulty] = useState(null);
-  const [category, setCategory] = useState('all');
   const [countdownValue, setCountdownValue] = useState(3); // 3, 2, 1, 'GO!'
   const [activePassage, setActivePassage] = useState(() => getRandomPassageObject(null, 'all'));
   const passage = activePassage.text;
@@ -40,7 +39,6 @@ export function useRace() {
   const passageRef = useRef(passage);
   const passageObjRef = useRef(activePassage);
   const difficultyRef = useRef(difficulty);
-  const categoryRef = useRef(category);
   const hasConcludedRef = useRef(false);
   const playerFinishedRef = useRef(false);
 
@@ -53,10 +51,6 @@ export function useRace() {
   useEffect(() => {
     difficultyRef.current = difficulty;
   }, [difficulty]);
-
-  useEffect(() => {
-    categoryRef.current = category;
-  }, [category]);
 
   // Direct DOM references to car track nodes for 60fps CSS transform updates
   const carNodesRef = useRef([]);
@@ -305,8 +299,8 @@ export function useRace() {
       console.log(`[CyberSprint] Starting race with seed: ${activeSeed}, difficulty: ${currentDiff}`);
     }
 
-    // Pick new passage respecting category and avoiding immediate repeat
-    const nextPassageObj = getRandomPassageObject(passageObjRef.current?.id, categoryRef.current);
+    // Pick new passage from mixed pool avoiding immediate repeat
+    const nextPassageObj = getRandomPassageObject(passageObjRef.current?.id);
     passageObjRef.current = nextPassageObj;
     setActivePassage(nextPassageObj);
     passageRef.current = nextPassageObj.text;
@@ -404,8 +398,6 @@ export function useRace() {
     phase,
     difficulty,
     setDifficulty,
-    category,
-    setCategory,
     activePassage,
     countdownValue,
     passage,

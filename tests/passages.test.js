@@ -126,4 +126,28 @@ describe('Upgraded Passages System', () => {
       currentObj = nextObj;
     }
   });
+
+  it('automatic mixed content pool avoids consecutive repeat and naturally mixes categories', () => {
+    let currentObj = getRandomPassageObject();
+    expect(currentObj).toBeDefined();
+    expect(currentObj.text).toBeDefined();
+
+    const seenCategories = new Set([currentObj.category]);
+
+    for (let i = 0; i < 50; i++) {
+      const nextObj = getRandomPassageObject(currentObj.id);
+      // Immediately previous passage is never repeated
+      expect(nextObj.id).not.toBe(currentObj.id);
+      expect(nextObj.text).not.toBe(currentObj.text);
+
+      // Natural mixing: consecutive races switch categories
+      expect(nextObj.category).not.toBe(currentObj.category);
+
+      seenCategories.add(nextObj.category);
+      currentObj = nextObj;
+    }
+
+    // Over 50 races, multiple distinct categories are naturally drawn
+    expect(seenCategories.size).toBeGreaterThanOrEqual(6);
+  });
 });
